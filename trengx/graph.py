@@ -28,7 +28,6 @@ class Graph:
         if not isinstance (key, str):
             raise TypeError ("The second argument (key) must be a string")
         # neo4j property value types: https://neo4j.com/docs/cypher-manual/current/syntax/values/
-
         with self.driver.session() as session:
             result = session.execute_write(self._add_node_tx, node_label, key, value)
             return result
