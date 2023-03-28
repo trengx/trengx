@@ -28,7 +28,6 @@ class Graph:
         if not isinstance (key, str):
             raise TypeError ("The second argument (key) must be a string")
         # neo4j property value types: https://neo4j.com/docs/cypher-manual/current/syntax/values/
-
         with self.driver.session() as session:
             result = session.execute_write(self._add_node_tx, node_label, key, value)
             return result
@@ -52,8 +51,31 @@ class Graph:
         with self.driver.session() as session:
             result = session.execute_write(self._delete_node_tx, node_label, key, value)
             return result
-
-    # Set node property value
+    
+    # perform math operation
+    @staticmethod    
+    def _do_math_tx(tx, id_key, id_value):
+        query = "MATCH (in1:num {"+ id_key + ": $id_value})-[:num2op]->(o:op)<-[:num2op]-(in2:num)" \
+            " MATCH (o)-[:op2num]->(out:num)" \
+            " WITH in1, in2, out, o.name AS opName" \
+            " SET out.value = CASE opName" \
+            "    WHEN '+' THEN in1.value + in2.value" \
+            "    WHEN '-' THEN in1.value - in2.value" \
+            "    WHEN '*' THEN in1.value * in2.value" \
+            "    WHEN '/' THEN in1.value / in2.value" \
+            "    ELSE out.value" \
+            " END" \
+            " RETURN out.value"
+        result = tx.run(query, id_key = id_key, id_value = id_value)
+        return result.single()[0]
+    
+    def do_math(self, id_key, id_value):
+        with self.driver.session() as session:
+            result = session.execute_write(self._do_math_tx, id_key, id_value)
+            return result
+        
+    
+    # set node property value
     @staticmethod
     def _set_node_prop_tx(tx, id_key, id_value, key, value):
         query = "MATCH (n) WHERE n." + id_key + " = $id_value" \
@@ -61,6 +83,7 @@ class Graph:
                 " RETURN n." + key 
         result = tx.run(query, id_value = id_value, value = value)
         return [id_key, id_value, key, result.single()[0]]
+    
     def set_node_prop(self, id_key, id_value, key, value):
         """Function for setting node property value"""
         # Check if the parameter types are correct
@@ -70,8 +93,10 @@ class Graph:
             raise TypeError ("The third argument (key) must be a string")
         # neo4j property value types: https://neo4j.com/docs/cypher-manual/current/syntax/values/
         with self.driver.session() as session:
-            result = session.execute_write(self._set_node_prop_tx, id_key, id_value, key, value)
-            return result
+            result1 = session.execute_write(self._set_node_prop_tx, id_key, id_value, key, value)
+            result2 = self.do_math (id_key, id_value)
+            return result1, result2
+
 
     # Get node property value
     @staticmethod
