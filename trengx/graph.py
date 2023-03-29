@@ -22,12 +22,6 @@ class Graph:
 
     def add_node(self, node_label, key, value):
         """Function for adding node"""
-        # Check if the parameter types are correct
-        if not isinstance (node_label, str):
-            raise TypeError ("The first argument (node label) must be a string")
-        if not isinstance (key, str):
-            raise TypeError ("The second argument (key) must be a string")
-        # neo4j property value types: https://neo4j.com/docs/cypher-manual/current/syntax/values/
         with self.driver.session() as session:
             result = session.execute_write(self._add_node_tx, node_label, key, value)
             return result
@@ -42,12 +36,6 @@ class Graph:
 
     def delete_node(self, node_label, key, value):
         """Function for deleting node"""
-        # Check if the parameter types are correct
-        if not isinstance (node_label, str):
-            raise TypeError ("The first argument (node label) must be a string")
-        if not isinstance (key, str):
-            raise TypeError ("The second argument (key) must be a string")
-        # neo4j property value types: https://neo4j.com/docs/cypher-manual/current/syntax/values/
         with self.driver.session() as session:
             result = session.execute_write(self._delete_node_tx, node_label, key, value)
             return result
@@ -65,15 +53,36 @@ class Graph:
             "    WHEN '/' THEN in1.value / in2.value" \
             "    ELSE out.value" \
             " END" \
-            " RETURN out.value"
-        result = tx.run(query, id_key = id_key, id_value = id_value)
-        return result.single()[0]
+            " RETURN out.name, out.value"
+        result = tx.run(query, id_key = id_key, id_value = id_value) # e.g., <Record out.name='z' out.value=10.4>
+        for record in result:
+            name = record['out.name']
+            value = record['out.value']
+            print (name)
+            print (value)
+        return name, value
     
     def do_math(self, id_key, id_value):
+        """Function for doing math"""
         with self.driver.session() as session:
             result = session.execute_write(self._do_math_tx, id_key, id_value)
+            self.set_node_prop('name', result[0], 'value', result[1], True)
             return result
-        
+
+    # check the presence of outgoing edge
+    @staticmethod
+    def _check_outgoing_edge_tx(tx, id_key, id_value):
+        query = "MATCH (n:num {"+ id_key + ": $id_value})-[label:num2op]->()" \
+                " RETURN COUNT(label) > 0 as has_outgoing_label" 
+        result = tx.run(query, id_value = id_value)
+        result = result.single()[0]
+        return result  # True or False
+    
+    def check_outgoing_edge(self, id_key, id_value):
+        """Function for checking the presence of outgoing edge"""
+        with self.driver.session() as session:
+            result = session.execute_write(self._check_outgoing_edge_tx, id_key, id_value)
+            return result      
     
     # set node property value
     @staticmethod
@@ -86,19 +95,15 @@ class Graph:
     
     def set_node_prop(self, id_key, id_value, key, value, forward):
         """Function for setting node property value"""
-        # Check if the parameter types are correct
-        if not isinstance (id_key, str):
-            raise TypeError ("The first argument (identification key) must be a string")
-        if not isinstance (key, str):
-            raise TypeError ("The third argument (key) must be a string")
-        # neo4j property value types: https://neo4j.com/docs/cypher-manual/current/syntax/values/
         results = []
         with self.driver.session() as session:
             result1 = session.execute_write(self._set_node_prop_tx, id_key, id_value, key, value)
             results.append(result1)
-            if forward == True:
-                result2 = self.do_math (id_key, id_value)
-                results.append(result2)
+            if forward is True:
+                outgoing_edge = self.check_outgoing_edge (id_key, id_value)
+                if outgoing_edge is True:
+                    result2 = self.do_math (id_key, id_value)
+                    results.append(result2)
             return results
 
 
@@ -112,12 +117,6 @@ class Graph:
 
     def get_node_prop(self, id_key, id_value, key):
         """Function for getting node property value"""
-        # Check if the parameter types are correct
-        if not isinstance (id_key, str):
-            raise TypeError ("The first argument (identification key) must be a string")
-        if not isinstance (key, str):
-            raise TypeError ("The third argument (key) must be a string")
-        # neo4j property value types: https://neo4j.com/docs/cypher-manual/current/syntax/values/
         with self.driver.session() as session:
             result = session.execute_write(self._get_node_prop_tx, id_key, id_value, key)
             return result
@@ -131,13 +130,7 @@ class Graph:
         return result
 
     def remove_node_prop(self, id_key, id_value, key):
-        """Function for getting node property value"""
-        # Check if the parameter types are correct
-        if not isinstance (id_key, str):
-            raise TypeError ("The first argument (identification key) must be a string")
-        if not isinstance (key, str):
-            raise TypeError ("The third argument (key) must be a string")
-        # neo4j property value types: https://neo4j.com/docs/cypher-manual/current/syntax/values/
+        """Function for removing node property value"""
         with self.driver.session() as session:
             result = session.execute_write(self._remove_node_prop_tx, id_key, id_value, key)
             return result
@@ -152,14 +145,6 @@ class Graph:
         return results
     def add_edge(self, edge_label:str, out_key:str, out_val, in_key:str, in_val):
         """Function for adding edge"""
-        # Check if the parameter types are correct
-        if not isinstance (edge_label, str):
-            raise TypeError ("The first argument (edge label) must be a string")
-        if not isinstance (out_key, str):
-            raise TypeError ("The second argument (out-node key) must be a string")
-        if not isinstance (in_key, str):
-            raise TypeError ("The fourth argument (in-node key) must be a string")
-        # neo4j property value types: https://neo4j.com/docs/cypher-manual/current/syntax/values/
         with self.driver.session() as session:
             results = session.execute_write(self._add_edge_tx, edge_label, out_key, out_val, in_key, in_val)
             return (results)
@@ -173,15 +158,7 @@ class Graph:
                 " DELETE r"
         tx.run(query, out_val = out_val, in_val = in_val)
     def delete_edge(self, edge_label, out_key, out_val, in_key, in_val):
-        """Function for adding edge"""
-        # Check if the parameter types are correct
-        if not isinstance (edge_label, str):
-            raise TypeError ("The first argument (edge label) must be a string")
-        if not isinstance (out_key, str):
-            raise TypeError ("The second argument (out-node key) must be a string")
-        if not isinstance (in_key, str):
-            raise TypeError ("The fourth argument (in-node key) must be a string")
-        # neo4j property value types: https://neo4j.com/docs/cypher-manual/current/syntax/values/
+        """Function for deleting edge"""
         with self.driver.session() as session:
             session.execute_write(self._delete_edge_tx, edge_label, out_key, out_val, in_key, in_val)
     
