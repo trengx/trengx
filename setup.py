@@ -8,7 +8,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='trengx',
-    version='0.0.5',
+    version='0.0.10',
     author='Yong-Jun Shin',
     packages=find_packages(),
     install_requires=[

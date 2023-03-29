@@ -84,7 +84,7 @@ class Graph:
         result = tx.run(query, id_value = id_value, value = value)
         return [id_key, id_value, key, result.single()[0]]
     
-    def set_node_prop(self, id_key, id_value, key, value):
+    def set_node_prop(self, id_key, id_value, key, value, forward):
         """Function for setting node property value"""
         # Check if the parameter types are correct
         if not isinstance (id_key, str):
@@ -92,10 +92,14 @@ class Graph:
         if not isinstance (key, str):
             raise TypeError ("The third argument (key) must be a string")
         # neo4j property value types: https://neo4j.com/docs/cypher-manual/current/syntax/values/
+        results = []
         with self.driver.session() as session:
             result1 = session.execute_write(self._set_node_prop_tx, id_key, id_value, key, value)
-            result2 = self.do_math (id_key, id_value)
-            return result1, result2
+            results.append(result1)
+            if forward == True:
+                result2 = self.do_math (id_key, id_value)
+                results.append(result2)
+            return results
 
 
     # Get node property value
