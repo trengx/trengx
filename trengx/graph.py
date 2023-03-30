@@ -15,9 +15,9 @@ class Graph:
     @staticmethod
     def _add_node_tx(tx, node_label, key, value):
         query = "MERGE (n:" + node_label + "{ " + key + ": $value })" \
-                " RETURN n{.*}"
-        result = tx.run(query, value = value)
-        return result.single()[0]
+                " RETURN 'node added' AS status"
+        result = tx.run(query, value = value).data()
+        return result
 
     def add_node(self, node_label, key, value):
         """Function for adding node"""
@@ -29,8 +29,9 @@ class Graph:
     @staticmethod
     def _delete_node_tx(tx, node_label, key, value):
         query = "MATCH (n:" + node_label + "{ " + key + ": $value })" \
-                " DELETE n"
-        result = tx.run(query, value = value)
+                " DELETE n" \
+                " RETURN 'node deleted' AS status"
+        result = tx.run(query, value = value).data()
         return result
 
     def delete_node(self, node_label, key, value):
@@ -38,6 +39,7 @@ class Graph:
         with self.driver.session() as session:
             result = session.execute_write(self._delete_node_tx, node_label, key, value)
             return result
+        
     
     # perform math operation
     @staticmethod    
@@ -103,7 +105,7 @@ class Graph:
     def _set_node_prop_tx(tx, id_key, id_value, key, value):
         query = "MATCH (n) WHERE n." + id_key + " = $id_value" \
                 " SET n." + key + " = $value" \
-                " RETURN n." + key 
+                " RETURN n." + key
         result = tx.run(query, id_value = id_value, value = value)
         return [id_key, id_value, key, result.single()[0]]
     
