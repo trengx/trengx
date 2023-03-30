@@ -15,9 +15,9 @@ class Graph:
     @staticmethod
     def _add_node_tx(tx, node_label, key, value):
         query = "MERGE (n:" + node_label + "{ " + key + ": $value })" \
-                " RETURN n{.*}"
-        result = tx.run(query, value = value)
-        return result.single()[0]
+                " RETURN n.name AS node_name"
+        result = tx.run(query, value = value).data()
+        return result
 
     def add_node(self, node_label, key, value):
         """Function for adding node"""
