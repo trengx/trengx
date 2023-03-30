@@ -39,6 +39,7 @@ class Graph:
         with self.driver.session() as session:
             result = session.execute_write(self._delete_node_tx, node_label, key, value)
             return result
+        
     
     # perform math operation
     @staticmethod    
@@ -104,7 +105,7 @@ class Graph:
     def _set_node_prop_tx(tx, id_key, id_value, key, value):
         query = "MATCH (n) WHERE n." + id_key + " = $id_value" \
                 " SET n." + key + " = $value" \
-                " RETURN n." + key 
+                " RETURN n." + key
         result = tx.run(query, id_value = id_value, value = value)
         return [id_key, id_value, key, result.single()[0]]
     
