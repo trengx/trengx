@@ -1,6 +1,5 @@
 # Graph class
 """Module providing basic graph queries (Neo4j Cypher)"""
-
 class Graph:
     """Class for providing basic graph queries (Neo4j Cypher)"""
     # Initialize graph database class
@@ -43,7 +42,8 @@ class Graph:
     # perform math operation
     @staticmethod    
     def _do_math_tx(tx, id_key, id_value):
-        query = "MATCH (in1:num {"+ id_key + ": $id_value})-[:num2op]->(o:op)<-[:num2op]-(in2:num)" \
+        query = "MATCH (in1:num {"+ id_key + ": $id_value})-[:num2op]->(o:op)" \
+            " OPTIONAL MATCH (in1)-[:num2op]->(o)<-[:num2op]-(in2:num)" \
             " MATCH (o)-[:op2num]->(out:num)" \
             " WITH in1, in2, out, o.name AS opName" \
             " SET out.value = CASE opName" \
@@ -51,6 +51,20 @@ class Graph:
             "    WHEN '-' THEN in1.value - in2.value" \
             "    WHEN '*' THEN in1.value * in2.value" \
             "    WHEN '/' THEN in1.value / in2.value" \
+            "    WHEN '%' THEN in1.value % in2.value" \
+            "    WHEN '^' THEN in1.value ^ in2.value" \
+            "    WHEN 'sqrt' THEN sqrt(in1.value)" \
+            "    WHEN 'abs' THEN abs(in1.value)" \
+            "    WHEN 'exp' THEN exp(in1.value)" \
+            "    WHEN 'log10' THEN log10(in1.value)" \
+            "    WHEN 'log' THEN log(in1.value)" \
+            "    WHEN 'sin' THEN sin(in1.value)" \
+            "    WHEN 'cos' THEN cos(in1.value)" \
+            "    WHEN 'tan' THEN tan(in1.value)" \
+            "    WHEN 'ceil' THEN ceil(in1.value)" \
+            "    WHEN 'floor' THEN floor(in1.value)" \
+            "    WHEN 'round' THEN round(in1.value)" \
+            "    WHEN 'sign' THEN sign(in1.value)" \
             "    ELSE out.value" \
             " END" \
             " RETURN out.name, out.value"
