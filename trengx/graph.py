@@ -15,7 +15,7 @@ class Graph:
     @staticmethod
     def _add_node_tx(tx, node_label, key, value):
         query = "MERGE (n:" + node_label + "{ " + key + ": $value })" \
-                " RETURN n.name AS node_name"
+                " RETURN 'node added' AS status"
         result = tx.run(query, value = value).data()
         return result
 
@@ -29,8 +29,9 @@ class Graph:
     @staticmethod
     def _delete_node_tx(tx, node_label, key, value):
         query = "MATCH (n:" + node_label + "{ " + key + ": $value })" \
-                " DELETE n"
-        result = tx.run(query, value = value)
+                " DELETE n" \
+                " RETURN 'node deleted' AS status"
+        result = tx.run(query, value = value).data()
         return result
 
     def delete_node(self, node_label, key, value):
