@@ -172,15 +172,15 @@ class Graph:
 
     # Delete edge
     @staticmethod
-    def _delete_edge_tx(tx, edge_label, out_key, out_val, in_key, in_val):
-        query = "MATCH (n) WHERE n." + out_key + " = $out_val" \
-                " MATCH (m) WHERE m." + in_key + " = $in_val" \
-                " MATCH (n)-[r:" + edge_label + "]->(m)" \
+    def _delete_edge_tx(tx, edge_label:str, out_id:int, in_id:int):
+        query = "MATCH (n)-[r:" + edge_label + "]->(m)" \
+                " WHERE id(n) = $out_id AND id(m) = $in_id" \
                 " DELETE r"
-        tx.run(query, out_val = out_val, in_val = in_val)
-    def delete_edge(self, edge_label, out_key, out_val, in_key, in_val):
+        tx.run(query, out_id=out_id, in_id=in_id)
+
+    def delete_edge(self, edge_label, out_id, in_id):
         """Function for deleting edge"""
         with self.driver.session() as session:
-            session.execute_write(self._delete_edge_tx, edge_label, out_key, out_val, in_key, in_val)
-    
+            session.execute_write(self._delete_edge_tx, edge_label, out_id, in_id)
+
     
