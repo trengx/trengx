@@ -29,8 +29,6 @@ class Graph:
             node_id = session.write_transaction(self._add_node_tx, node_label, key, value, merge)
             return node_id
 
-
-
     # Delete node
     @staticmethod
     def _delete_node_tx(tx, node_label, key, value):
@@ -158,18 +156,20 @@ class Graph:
             return result
 
     # Add edge
+
     @staticmethod
-    def _add_edge_tx(tx, edge_label:str, out_key:str, out_val, in_key:str, in_val):
-        query = "MATCH (n) WHERE n." + out_key + " = $out_val" \
-                " MATCH (m) WHERE m." + in_key + " = $in_val" \
+    def _add_edge_tx(tx, edge_label:str, out_id:int, in_id:int):
+        query = "MATCH (n) WHERE id(n) = $out_id" \
+                " MATCH (m) WHERE id(m) = $in_id" \
                 " MERGE (n)-[r:" + edge_label + "]->(m)"
-        results = tx.run(query, out_val = out_val, in_val = in_val).data
+        results = tx.run(query, out_id=out_id, in_id=in_id).data
         return results
-    def add_edge(self, edge_label:str, out_key:str, out_val, in_key:str, in_val):
+
+    def add_edge(self, edge_label:str, out_id:int, in_id:int):
         """Function for adding edge"""
         with self.driver.session() as session:
-            results = session.execute_write(self._add_edge_tx, edge_label, out_key, out_val, in_key, in_val)
-            return (results)
+            results = session.execute_write(self._add_edge_tx, edge_label, out_id, in_id)
+            return results
 
     # Delete edge
     @staticmethod
