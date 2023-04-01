@@ -15,15 +15,16 @@ class Graph:
     @staticmethod
     def _add_node_tx(tx, node_label, key, value):
         query = "MERGE (n:" + node_label + "{ " + key + ": $value })" \
-                " RETURN 'node added' AS status"
-        result = tx.run(query, value = value).data()
-        return result
+                " RETURN id(n) AS node_id"
+        result = tx.run(query, value = value).single()
+        return result["node_id"]
 
     def add_node(self, node_label, key, value):
         """Function for adding node"""
         with self.driver.session() as session:
-            result = session.execute_write(self._add_node_tx, node_label, key, value)
-            return result
+            node_id = session.write_transaction(self._add_node_tx, node_label, key, value)
+            return node_id
+
 
     # Delete node
     @staticmethod
