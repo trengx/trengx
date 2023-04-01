@@ -156,7 +156,6 @@ class Graph:
             return result
 
     # Add edge
-
     @staticmethod
     def _add_edge_tx(tx, edge_label:str, out_id:int, in_id:int):
         query = "MATCH (n) WHERE id(n) = $out_id" \
