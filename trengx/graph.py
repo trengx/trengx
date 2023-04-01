@@ -13,17 +13,22 @@ class Graph:
 
     # Add node
     @staticmethod
-    def _add_node_tx(tx, node_label, key, value):
-        query = "MERGE (n:" + node_label + "{ " + key + ": $value })" \
-                " RETURN id(n) AS node_id"
-        result = tx.run(query, value = value).single()
-        return result["node_id"]
+    def _add_node_tx(tx, node_label, key, value, merge=False):
+        if merge:
+            query = "MERGE (n:" + node_label + "{ " + key + ": $value })" \
+                    " RETURN id(n) AS node_id"
+        else:
+            query = "CREATE (n:" + node_label + "{ " + key + ": $value })" \
+                    " RETURN id(n) AS node_id"
+        result = tx.run(query, value=value).single()
+        return {'node_id': result["node_id"]}
 
-    def add_node(self, node_label, key, value):
-        """Function for adding node"""
+    def add_node(self, node_label, key, value, merge=False):
+        """Function for adding or merging node"""
         with self.driver.session() as session:
-            node_id = session.write_transaction(self._add_node_tx, node_label, key, value)
+            node_id = session.write_transaction(self._add_node_tx, node_label, key, value, merge)
             return node_id
+
 
 
     # Delete node
