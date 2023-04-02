@@ -134,8 +134,6 @@ class Graph:
                     results.append(result2)
         return results
 
-
-
     # Get node property value
     @staticmethod
     def _get_node_prop_tx(tx, id_key, id_value, key ):
@@ -181,8 +179,6 @@ class Graph:
         with self.driver.session() as session:
             result = session.write_transaction(self._add_edge_tx, edge_label, out_id, in_id, properties)
             return result
-
-
 
     # Delete edge
     @staticmethod
