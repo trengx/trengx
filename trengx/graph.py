@@ -13,24 +13,26 @@ class Graph:
 
     # Add node
     @staticmethod
-    def _add_node_tx(tx, node_label:str, name:str, merge:bool):
+    def _add_node_tx(tx, node_label:str, name:str, properties:dict, merge:bool):
         if merge:
             query = "MERGE (n:" + node_label + "{ name: $name })" \
+                    " SET n += $properties" \
                     " RETURN n"
         else:
             query = "CREATE (n:" + node_label + "{ name: $name })" \
+                    " SET n += $properties" \
                     " RETURN n"
-        result = tx.run(query, name=name).single()
+        result = tx.run(query, name=name, properties=properties).single()
         node = result['n']
         node_properties = dict(node.items())
         return {'node_id': node.id, 'node_label': node.labels, 'properties': node_properties}
 
-    def add_node(self, node_label:str, name:str, merge=False):
+    def add_node(self, node_label:str, name:str, properties:dict, merge=False):
         """Function for creating or merging node
         Node name (property) should be given)"""
         with self.driver.session() as session:
-            node_id = session.write_transaction(self._add_node_tx, node_label, name, merge)
-            return node_id
+            node = session.write_transaction(self._add_node_tx, node_label, name, properties, merge)
+            return node
 
     @staticmethod
     def _delete_node_tx(tx, node_id:int):

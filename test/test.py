@@ -1,3 +1,6 @@
+# pip install neo4j==5.7.0
+# pip install python-dotenv==1.0.0
+
 import os
 from dotenv import load_dotenv
 from neo4j import GraphDatabase as graphdb
@@ -12,8 +15,11 @@ user = os.getenv("user")  # Get the value of the user variable
 password = os.getenv("password")  # Get the value of the pw variable
 g = graph.Graph(graphdb, uri, user, password)
 
+prop = {'value': 4.6, 'condition':'good'}
+r = g.add_node ('num', 'x', prop, merge=True)
+print (r)
 
-x = g.add_node ('num', 'x', merge=True)
+'''
 x_id = x['node_id']
 g.set_node_prop(x_id, 'value', 2.0, False)
 
@@ -48,3 +54,4 @@ g.set_node_prop(s_id, 'value', 0.0, False)
 g.add_edge('op2num',op2_id, s_id, merge=True)
 
 g.set_node_prop(x_id, 'value', 2.0, do_math=True)
+'''
