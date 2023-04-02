@@ -13,48 +13,47 @@ class Graph:
 
     # Add node
     @staticmethod
-    def _add_node_tx(tx, node_label, key, value, merge=False):
+    def _add_node_tx(tx, node_label:str, name:str, merge:bool):
         if merge:
-            query = "MERGE (n:" + node_label + "{ " + key + ": $value })" \
-                    " RETURN id(n) AS node_id"
+            query = "MERGE (n:" + node_label + "{ name: $name })" \
+                    " RETURN n"
         else:
-            query = "CREATE (n:" + node_label + "{ " + key + ": $value })" \
-                    " RETURN id(n) AS node_id"
-        result = tx.run(query, value=value).single()
-        return {'node_id': result["node_id"]}
+            query = "CREATE (n:" + node_label + "{ name: $name })" \
+                    " RETURN n"
+        result = tx.run(query, name=name).single()
+        node = result['n']
+        node_properties = dict(node.items())
+        return {'node_id': node.id, 'node_label': node.labels, 'properties': node_properties}
 
-    def add_node(self, node_label, key, value, merge=False):
-        """Function for adding or merging node"""
+    def add_node(self, node_label:str, name:str, merge=False):
+        """Function for creating or merging node
+        Node name (property) should be given)"""
         with self.driver.session() as session:
-            node_id = session.write_transaction(self._add_node_tx, node_label, key, value, merge)
+            node_id = session.write_transaction(self._add_node_tx, node_label, name, merge)
             return node_id
 
-
-
-    # Delete node
     @staticmethod
-    def _delete_node_tx(tx, node_label, key, value):
-        query = "MATCH (n:" + node_label + "{ " + key + ": $value })" \
+    def _delete_node_tx(tx, node_id:int):
+        query = "MATCH (n) WHERE id(n) = $node_id" \
                 " DELETE n" \
-                " RETURN 'node deleted' AS status"
-        result = tx.run(query, value = value).data()
-        return result
+                " RETURN id(n) AS deleted_node_id"
+        result = tx.run(query, node_id=node_id).single()
+        return {'deleted_node_id': result["deleted_node_id"]}
 
-    def delete_node(self, node_label, key, value):
-        """Function for deleting node"""
+    def delete_node(self, node_id:int):
+        """Function for deleting node using node id"""
         with self.driver.session() as session:
-            result = session.execute_write(self._delete_node_tx, node_label, key, value)
-            return result
-        
+            deleted_node_id = session.write_transaction(self._delete_node_tx, node_id)
+            return {'deleted_node_id': deleted_node_id['deleted_node_id']}
     
     # perform math operation
-    @staticmethod    
-    def _do_math_tx(tx, id_key, id_value):
-        query = "MATCH (in1:num {"+ id_key + ": $id_value})-[:num2op]->(o:op)" \
-            " OPTIONAL MATCH (in1)-[:num2op]->(o)<-[:num2op]-(in2:num)" \
-            " MATCH (o)-[:op2num]->(out:num)" \
-            " WITH in1, in2, out, o.name AS opName" \
-            " SET out.value = CASE opName" \
+    @staticmethod
+    def _do_math_tx(tx, node_id:int):
+        query = "MATCH (in1)-[:num2op]->(o:op)" \
+            " OPTIONAL MATCH (in1)-[:num2op]->(o)<-[:num2op]-(in2)" \
+            " MATCH (o)-[:op2num]->(out)" \
+            " WHERE id(in1) = $node_id" \
+            " WITH id(out) AS out_id, out.name AS out_name, CASE o.name" \
             "    WHEN '+' THEN in1.value + in2.value" \
             "    WHEN '-' THEN in1.value - in2.value" \
             "    WHEN '*' THEN in1.value * in2.value" \
@@ -74,59 +73,67 @@ class Graph:
             "    WHEN 'round' THEN round(in1.value)" \
             "    WHEN 'sign' THEN sign(in1.value)" \
             "    ELSE out.value" \
-            " END" \
-            " RETURN out.name, out.value"
-        result = tx.run(query, id_key = id_key, id_value = id_value) # e.g., <Record out.name='z' out.value=10.4>
+            " END AS value" \
+            " SET out.value = value" \
+            " RETURN out_id, out_name, value AS out_value"
+        result = tx.run(query, node_id=node_id)
         for record in result:
-            name = record['out.name']
-            value = record['out.value']
-            print (name)
-            print (value)
-        return name, value
+            out_id = record['out_id']
+            out_name = record['out_name']
+            out_value = record['out_value']
+            print(out_id)
+            print(out_name)
+            print(out_value)
+        return out_id, out_name, out_value
     
-    def do_math(self, id_key, id_value):
+    def do_math(self, node_id:int):
         """Function for doing math"""
         with self.driver.session() as session:
-            result = session.execute_write(self._do_math_tx, id_key, id_value)
-            self.set_node_prop('name', result[0], 'value', result[1], True)
+            result = session.execute_write(self._do_math_tx, node_id)
+            self.set_node_prop(result[0], result[1], result[2], True)
             return result
 
     # check the presence of outgoing edge
     @staticmethod
-    def _check_outgoing_edge_tx(tx, id_key, id_value):
-        query = "MATCH (n:num {"+ id_key + ": $id_value})-[label:num2op]->()" \
-                " RETURN COUNT(label) > 0 as has_outgoing_label" 
-        result = tx.run(query, id_value = id_value)
-        result = result.single()[0]
-        return result  # True or False
-    
-    def check_outgoing_edge(self, id_key, id_value):
+    def _check_outgoing_edge_tx(tx, node_id):
+        query = "MATCH (n)-[label:num2op]->()" \
+                " WHERE id(n) = $node_id" \
+                " RETURN COUNT(label) > 0 as has_outgoing_label"
+        result = tx.run(query, node_id=node_id)
+        has_outgoing_edge = result.single()[0]
+        return has_outgoing_edge
+
+    def check_outgoing_edge(self, node_id:int):
         """Function for checking the presence of outgoing edge"""
         with self.driver.session() as session:
-            result = session.execute_write(self._check_outgoing_edge_tx, id_key, id_value)
-            return result      
+            result = session.execute_write(self._check_outgoing_edge_tx, node_id)
+            return result 
     
     # set node property value
     @staticmethod
-    def _set_node_prop_tx(tx, id_key, id_value, key, value):
-        query = "MATCH (n) WHERE n." + id_key + " = $id_value" \
+    def _set_node_prop_tx(tx, node_id:int, key:str, value):
+        query = "MATCH (n) WHERE id(n) = $node_id" \
                 " SET n." + key + " = $value" \
-                " RETURN n." + key
-        result = tx.run(query, id_value = id_value, value = value)
-        return [id_key, id_value, key, result.single()[0]]
+                " RETURN n" 
+        result = tx.run(query, node_id=node_id, value=value)
+        record = result.single()
+        node = record['n']
+        node_properties = dict(node.items())
+        return {'node_id': node.id, 'properties': node_properties}
     
-    def set_node_prop(self, id_key, id_value, key, value, forward):
+    def set_node_prop(self, node_id:int, key:str, value, do_math):
         """Function for setting node property value"""
         results = []
         with self.driver.session() as session:
-            result1 = session.execute_write(self._set_node_prop_tx, id_key, id_value, key, value)
+            result1 = session.execute_write(self._set_node_prop_tx, node_id, key, value)
             results.append(result1)
-            if forward is True:
-                outgoing_edge = self.check_outgoing_edge (id_key, id_value)
+            if do_math is True:
+                outgoing_edge = self.check_outgoing_edge(node_id)
                 if outgoing_edge is True:
-                    result2 = self.do_math (id_key, id_value)
+                    result2 = self.do_math(node_id)
                     results.append(result2)
-            return results
+        return results
+
 
 
     # Get node property value
@@ -159,29 +166,34 @@ class Graph:
 
     # Add edge
     @staticmethod
-    def _add_edge_tx(tx, edge_label:str, out_key:str, out_val, in_key:str, in_val):
-        query = "MATCH (n) WHERE n." + out_key + " = $out_val" \
-                " MATCH (m) WHERE m." + in_key + " = $in_val" \
-                " MERGE (n)-[r:" + edge_label + "]->(m)"
-        results = tx.run(query, out_val = out_val, in_val = in_val).data
-        return results
-    def add_edge(self, edge_label:str, out_key:str, out_val, in_key:str, in_val):
+    def _add_edge_tx(tx, edge_label:str, out_id:int, in_id:int):
+        query = "MATCH (n) WHERE id(n) = $out_id" \
+                " MATCH (m) WHERE id(m) = $in_id" \
+                " MERGE (n)-[r:" + edge_label + "]->(m)" \
+                " RETURN id(r) as edge_id"
+        result = tx.run(query, out_id=out_id, in_id=in_id).data()
+        return result
+
+    def add_edge(self, edge_label:str, out_id:int, in_id:int):
         """Function for adding edge"""
         with self.driver.session() as session:
-            results = session.execute_write(self._add_edge_tx, edge_label, out_key, out_val, in_key, in_val)
-            return (results)
+            result = session.execute_write(self._add_edge_tx, edge_label, out_id, in_id)
+            return result
 
     # Delete edge
     @staticmethod
-    def _delete_edge_tx(tx, edge_label, out_key, out_val, in_key, in_val):
-        query = "MATCH (n) WHERE n." + out_key + " = $out_val" \
-                " MATCH (m) WHERE m." + in_key + " = $in_val" \
-                " MATCH (n)-[r:" + edge_label + "]->(m)" \
-                " DELETE r"
-        tx.run(query, out_val = out_val, in_val = in_val)
-    def delete_edge(self, edge_label, out_key, out_val, in_key, in_val):
+    def _delete_edge_tx(tx, edge_label:str, out_id:int, in_id:int):
+        query = "MATCH (n)-[r:" + edge_label + "]->(m)" \
+                " WHERE id(n) = $out_id AND id(m) = $in_id" \
+                " DELETE r" \
+                " RETURN id(r) as deleted_edge_id"
+        result = tx.run(query, out_id=out_id, in_id=in_id).data()
+        return result
+
+    def delete_edge(self, edge_label:str, out_id:int, in_id:int):
         """Function for deleting edge"""
         with self.driver.session() as session:
-            session.execute_write(self._delete_edge_tx, edge_label, out_key, out_val, in_key, in_val)
-    
+            result = session.execute_write(self._delete_edge_tx, edge_label, out_id, in_id)
+            return result
+
     
