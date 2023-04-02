@@ -166,19 +166,23 @@ class Graph:
 
     # Add edge
     @staticmethod
-    def _add_edge_tx(tx, edge_label:str, out_id:int, in_id:int):
+    def _add_edge_tx(tx, edge_label:str, out_id:int, in_id:int, properties:dict):
         query = "MATCH (n) WHERE id(n) = $out_id" \
                 " MATCH (m) WHERE id(m) = $in_id" \
-                " MERGE (n)-[r:" + edge_label + "]->(m)" \
-                " RETURN id(r) as edge_id"
-        result = tx.run(query, out_id=out_id, in_id=in_id).data()
+                " MERGE (n)-[r:" + edge_label + "]->(m)"
+        if properties:
+            query += " SET r += $properties"
+        query += " RETURN id(r) AS edge_id, type(r) AS edge_label, id(n) AS out_node_id, id(m) AS in_node_id, properties(r) AS properties"
+        result = tx.run(query, out_id=out_id, in_id=in_id, properties=properties).data()
         return result
 
-    def add_edge(self, edge_label:str, out_id:int, in_id:int):
+    def add_edge(self, edge_label:str, out_id:int, in_id:int, properties:dict=None):
         """Function for adding edge"""
         with self.driver.session() as session:
-            result = session.execute_write(self._add_edge_tx, edge_label, out_id, in_id)
+            result = session.write_transaction(self._add_edge_tx, edge_label, out_id, in_id, properties)
             return result
+
+
 
     # Delete edge
     @staticmethod
