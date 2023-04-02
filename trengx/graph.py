@@ -53,7 +53,7 @@ class Graph:
             " OPTIONAL MATCH (in1)-[:num2op]->(o)<-[:num2op]-(in2)" \
             " MATCH (o)-[:op2num]->(out)" \
             " WHERE id(in1) = $node_id" \
-            " WITH id(out) AS out_id, out.name AS out_name, CASE o.name" \
+            " WITH id(out) AS out_id, out.name AS out_name, out, CASE o.name" \
             "    WHEN '+' THEN in1.value + in2.value" \
             "    WHEN '-' THEN in1.value - in2.value" \
             "    WHEN '*' THEN in1.value * in2.value" \
@@ -75,15 +75,15 @@ class Graph:
             "    ELSE out.value" \
             " END AS value" \
             " SET out.value = value" \
-            " RETURN out_id, out_name, value AS out_value"
-        result = tx.run(query, node_id=node_id)
+            " RETURN out_id, out_name, out.value AS out_value"
+        result = tx.run(query, node_id=node_id).data()
         for record in result:
             out_id = record['out_id']
             out_name = record['out_name']
             out_value = record['out_value']
-            print(out_id)
-            print(out_name)
-            print(out_value)
+            print(f'out_id: {out_id}')
+            print(f'out_name: {out_name}')
+            print(f'out_value: {out_value}')
         return out_id, out_name, out_value
     
     def do_math(self, node_id:int):
@@ -93,7 +93,7 @@ class Graph:
             self.set_node_prop(result[0], result[1], result[2], True)
             return result
 
-    # check the presence of outgoing edge
+    # check the presence 5of outgoing edge
     @staticmethod
     def _check_outgoing_edge_tx(tx, node_id):
         query = "MATCH (n)-[label:num2op]->()" \
