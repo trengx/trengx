@@ -95,7 +95,7 @@ class Graph:
             self.set_node_prop(result[0], result[1], result[2], True)
             return result
 
-    # check the presence 5of outgoing edge
+    # check the presence of outgoing edge
     @staticmethod
     def _check_outgoing_edge_tx(tx, node_id):
         query = "MATCH (n)-[label:num2op]->()" \
@@ -187,7 +187,6 @@ class Graph:
             result = session.write_transaction(self._add_edge_tx, edge_label, out_id, in_id, properties, merge)
             return result
 
-
     # Delete edge
     @staticmethod
     def _delete_edge_tx(tx, edge_label:str, out_id:int, in_id:int):
@@ -203,5 +202,3 @@ class Graph:
         with self.driver.session() as session:
             result = session.execute_write(self._delete_edge_tx, edge_label, out_id, in_id)
             return result
-
-    
