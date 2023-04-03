@@ -148,17 +148,17 @@ class Graph:
 
     # Get node property value
     @staticmethod
-    def _get_node_prop_tx(tx, id_key, id_value, key ):
-        query = "MATCH (n) WHERE n." + id_key + " = $id_value" \
-                " RETURN n." + key + " as value"
-        result = tx.run(query, id_value = id_value)
+    def _get_node_prop_tx(tx, node_id, key):
+        query = "MATCH (n) WHERE id(n) = $node_ide RETURN n.$key as value"
+        result = tx.run(query, node_id=node_id, key=key)
         return result.single()[0]
 
-    def get_node_prop(self, id_key, id_value, key):
-        """Function for getting node property value"""
+    def get_node_prop(self, node_id, key):
+        """Function for getting node property value using node ID"""
         with self.driver.session() as session:
-            result = session.execute_write(self._get_node_prop_tx, id_key, id_value, key)
+            result = session.execute_write(self._get_node_prop_tx, node_id, key)
             return result
+
     
     # Remove node property
     @staticmethod
