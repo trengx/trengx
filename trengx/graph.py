@@ -43,6 +43,7 @@ class Graph:
             return node
 
 
+    # Delete node
     @staticmethod
     def _delete_node_tx(tx, node_id:int):
         query = "MATCH (n) WHERE id(n) = $node_id" \
@@ -57,7 +58,7 @@ class Graph:
             deleted_node_id = session.write_transaction(self._delete_node_tx, node_id)
             return {'deleted_node_id': deleted_node_id['deleted_node_id']}
     
-    # perform math operation
+    # Perform math operation
     @staticmethod
     def _do_math_tx(tx, node_id:int):
         query = "MATCH (in1)-[:num2op]->(o:op)" \
@@ -104,7 +105,7 @@ class Graph:
             self.set_node_prop(result[0], result[1], result[2], True)
             return result
 
-    # check the presence of outgoing edge
+    # Check the presence of outgoing edge
     @staticmethod
     def _check_outgoing_edge_tx(tx, node_id):
         query = "MATCH (n)-[label:num2op]->()" \
@@ -120,7 +121,7 @@ class Graph:
             result = session.execute_write(self._check_outgoing_edge_tx, node_id)
             return result 
     
-    # set node property value
+    # Set node property value
     @staticmethod
     def _set_node_prop_tx(tx, node_id:int, key:str, value):
         query = "MATCH (n) WHERE id(n) = $node_id" \
