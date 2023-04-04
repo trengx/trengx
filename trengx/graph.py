@@ -35,7 +35,7 @@ class Graph:
         node_properties = dict(node.items())
         return {'node_id': node.id, 'node_label': node.labels, 'properties': node_properties}
 
-    def add_node(self, node_label:str, name:str, properties:dict={}, merge=False):
+    def add_node(self, node_label:str, name:str, properties:dict, merge=False):
         """Function for creating or merging node
         Node name (property) should be given)"""
         with self.driver.session() as session:
@@ -67,11 +67,15 @@ class Graph:
             " WHERE id(in1) = $node_id" \
             " WITH id(out) AS out_id, out.name AS out_name, out, CASE o.name" \
             "    WHEN '+' THEN in1.value + in2.value" \
-            "    WHEN '-' THEN in1.value - in2.value" \
+            "    WHEN '-' THEN" \
+            "       CASE WHEN o.reverse THEN in2.value - in1.value ELSE in1.value - in2.value END" \
             "    WHEN '*' THEN in1.value * in2.value" \
-            "    WHEN '/' THEN in1.value / in2.value" \
-            "    WHEN '%' THEN in1.value % in2.value" \
-            "    WHEN '^' THEN in1.value ^ in2.value" \
+            "    WHEN '/' THEN" \
+            "       CASE WHEN o.reverse THEN in2.value / in1.value ELSE in1.value / in2.value END" \
+            "    WHEN '%' THEN" \
+            "       CASE WHEN o.reverse THEN in2.value % in1.value ELSE in1.value % in2.value END" \
+            "    WHEN '^' THEN" \
+            "       CASE WHEN o.reverse THEN in2.value ^ in1.value ELSE in1.value ^ in2.value END" \
             "    WHEN 'sqrt' THEN sqrt(in1.value)" \
             "    WHEN 'abs' THEN abs(in1.value)" \
             "    WHEN 'exp' THEN exp(in1.value)" \
@@ -97,7 +101,7 @@ class Graph:
             print(f'out_name: {out_name}')
             print(f'out_value: {out_value}')
         return out_id, out_name, out_value
-    
+
     def do_math(self, node_id:int):
         """Function for doing math"""
         with self.driver.session() as session:
