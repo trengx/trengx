@@ -42,7 +42,6 @@ class Graph:
             node = session.write_transaction(self._add_node_tx, node_label, name, properties, merge)
             return node
 
-
     # Delete node
     @staticmethod
     def _delete_node_tx(tx, node_id:int):
@@ -50,14 +49,18 @@ class Graph:
                 " DELETE n" \
                 " RETURN id(n) AS deleted_node_id"
         result = tx.run(query, node_id=node_id).single()
-        return {'deleted_node_id': result["deleted_node_id"]}
+        if result is None:
+            return None
+        return {'deleted_node_id': result['deleted_node_id']}
 
     def delete_node(self, node_id:int):
         """Function for deleting node using node id"""
         with self.driver.session() as session:
-            deleted_node_id = session.write_transaction(self._delete_node_tx, node_id)
-            return {'deleted_node_id': deleted_node_id['deleted_node_id']}
-    
+            result = session.write_transaction(self._delete_node_tx, node_id)
+            if result is None:
+                return None
+            return result
+
     # Perform math operation
     @staticmethod
     def _do_math_tx(tx, node_id:int):

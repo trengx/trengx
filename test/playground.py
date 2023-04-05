@@ -28,5 +28,10 @@ e_i = g.add_node ('num', 'e_i', {'value': 0.0})
 e_i_id = e_i['node_id']
 g.add_edge ('op2num', sub_id, e_i_id)
 g.set_node_prop(y_i_id, 'value', 4, True)'''
-r = g.add_node ('num', 'y_i', {'value': 2.0})
-print (r)
+node = g.add_node ('num', 'node', {'value': 2.0})
+node_id = node['node_id']
+a = g.delete_node(node_id)
+print (a)
+b = {'deleted_node_id': node_id}
+print (b)
+print (a == b)
