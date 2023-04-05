@@ -165,7 +165,6 @@ class Graph:
         with self.driver.session() as session:
             result = session.execute_write(self._get_node_prop_tx, node_id, key)
             return result
-
     
     # Remove node property
     @staticmethod
@@ -219,3 +218,17 @@ class Graph:
         with self.driver.session() as session:
             result = session.execute_write(self._delete_edge_tx, edge_label, out_id, in_id)
             return result
+
+    # Delete all
+    @staticmethod
+    def _delete_all_tx(tx):
+        query = "MATCH (n)\n" \
+                "OPTIONAL MATCH (n)-[r]-()\n" \
+                "DELETE n, r"
+        tx.run(query)
+    
+    def delete_all(self):
+        """Function for deleting all nodes and relationships"""
+        with self.driver.session() as session:
+            session.write_transaction(self._delete_all_tx)
+        return {'status': 'deleted all'}

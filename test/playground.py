@@ -13,25 +13,21 @@ password= os.getenv("NEO4J_PASSWORD")  # Get the value of the pw variable
 
 # Create Graph Class
 g = graph.Graph(graphdb, uri, user, password)
-
-'''
-# e[i] = y[i] - y_est[i]
-y_i = g.add_node ('num', 'y_i', {'value': 2.0})
-y_i_id = y_i['node_id']
-y_est_i = g.add_node ('num', 'y_est_i', {'value': 3.0})
-y_est_i_id = y_est_i['node_id']
-sub = g.add_node ('op', '%', {'reverse':False})
-sub_id = sub['node_id']
-g.add_edge ('num2op', y_i_id, sub_id)
-g.add_edge ('num2op', y_est_i_id, sub_id)
-e_i = g.add_node ('num', 'e_i', {'value': 0.0})
-e_i_id = e_i['node_id']
-g.add_edge ('op2num', sub_id, e_i_id)
-g.set_node_prop(y_i_id, 'value', 4, True)'''
-node = g.add_node ('num', 'node', {'value': 2.0})
-node_id = node['node_id']
-a = g.delete_node(node_id)
-print (a)
-b = {'deleted_node_id': node_id}
-print (b)
-print (a == b)
+g.delete_all()
+in_1 = g.add_node ('num', 'in_1', {'value': 2.0})
+in_1_id = in_1['node_id']
+print (in_1_id)
+in_2 = g.add_node ('num', 'in_2', {'value': 3.0})
+in_2_id = in_2['node_id']
+print (in_2_id)
+add = g.add_node ('op', '+', {'reverse': False})
+add_id = add['node_id']
+print (add_id)
+g.add_edge ('num2op', in_1_id, add_id)
+g.add_edge ('num2op', in_2_id, add_id)
+out = g.add_node ('num', 'out', {'value': 0.0})
+out_id = out['node_id']
+print (out_id)
+g.add_edge ('op2num', add_id, out_id)
+# print (g.do_math(in_1_id))
+print (g.do_math(in_1_id) == (out_id, 'out', 5.0))
