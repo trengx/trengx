@@ -36,8 +36,16 @@ class Graph:
         return {'node_id': node.id, 'node_label': node.labels, 'properties': node_properties}
 
     def add_node(self, node_label:str, name:str, properties:dict, merge=False):
-        """Function for creating or merging node
-        Node name (property) should be given)"""
+        """Function for creating or merging node: Node name (property) should be given)"""
+        if not isinstance(node_label, str):
+            raise TypeError("Node label must be a string.")
+        if not isinstance(name, str):
+            raise TypeError("Node name must be a string.")
+        if not isinstance(properties, dict):
+            raise TypeError("Node properties must be a dictionary.")
+        if not isinstance(merge, bool):
+            raise TypeError("Merge flag must be a boolean.")
+            
         with self.driver.session() as session:
             node = session.write_transaction(self._add_node_tx, node_label, name, properties, merge)
             return node

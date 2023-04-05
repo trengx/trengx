@@ -3,6 +3,7 @@ from neo4j import GraphDatabase as graphdb
 import sys
 sys.path.append('trengx')
 import graph
+import pytest
 
 # Codespaces secrets
 uri = os.environ['NEO4J_URI'] # Get the value of the uri variable
@@ -18,6 +19,15 @@ def test_add_node():
     node = g.add_node ('num', 'node', {'value': 2.0})
     assert node['properties'] == {'name': 'node', 'value': 2.0}
 
+def test_add_node_type_error():
+    """Function for testing parameter type error """
+    with pytest.raises(TypeError):
+        g.add_node(56, 'node', {'value': 2.0}) # node label:str
+    with pytest.raises(TypeError):
+        g.add_node('num', 34, {'value': 2.0}) # node name:str
+    with pytest.raises(TypeError):
+        g.add_node(56, 'node', 'value: 2.0') # properties:dict
+
 def test_delete_node():
     """Function for testing delete_node"""
     node = g.add_node ('num', 'node', {'value': 2.0})
@@ -26,7 +36,6 @@ def test_delete_node():
 
 def test_do_math():
     """Function for testing do_math"""
-
     in_1 = g.add_node ('num', 'in_1', {'value': 2.0})
     in_1_id = in_1['node_id']
     print (in_1_id)
