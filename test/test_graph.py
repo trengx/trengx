@@ -1,5 +1,3 @@
-# pip install neo4j==5.7.0
-
 import os 
 from neo4j import GraphDatabase as graphdb
 import sys
@@ -16,6 +14,18 @@ g = graph.Graph(graphdb, uri, user, password)
 
 
 def test_add_node():
-    assert g.add_node ('num', 'y_i', {'value': 2.0})['properties'] == {'name': 'y_i', 'value': 2.0}
+    node = g.add_node ('num', 'y_i', {'value': 2.0})
+    assert node['properties'] == {'name': 'y_i', 'value': 2.0}
+
+def test_delete_node():
+    node = g.add_node ('num', 'node', {'value': 2.0})
+    node_id = node['node_id']
+    assert g.delete_node(node_id) == {'deleted_node_id': node_id}
+
+
+
+    
+print (node_id)
+print (g.delete_node(node_id))      
 
 g.close()
