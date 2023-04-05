@@ -15,13 +15,13 @@ g = graph.Graph(graphdb, uri, user, password)
 
 def test_add_node():
     """Function for testing add_node"""
-    node = g.add_node ('num', 'y_i', {'value': 2.0})
-    assert node['properties'] == {'name': 'y_i', 'value': 2.0}
+    node = g.add_node ('num', 'node', {'value': 2.0})
+    assert node['properties'] == {'name': 'node', 'value': 2.0}
 
 def test_delete_node():
     """Function for testing delete_node"""
     node = g.add_node ('num', 'node', {'value': 2.0})
     node_id = node['node_id']
     assert g.delete_node(node_id) == {'deleted_node_id': node_id}
-    
+
 g.close()
