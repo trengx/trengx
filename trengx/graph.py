@@ -64,10 +64,10 @@ class Graph:
     # Perform math operation
     @staticmethod
     def _do_math_tx(tx, node_id:int):
-        query = "MATCH (in1)-[:num2op]->(o:op)" \
-            " OPTIONAL MATCH (in1)-[:num2op]->(o)<-[:num2op]-(in2)" \
+        query = "MATCH (in1)-[r:num2op]->(o:op)" \
+            " OPTIONAL MATCH (in1)-[r:num2op]->(o)<-[:num2op]-(in2)" \
             " MATCH (o)-[:op2num]->(out)" \
-            " WHERE id(in1) = $node_id" \
+            " WHERE id(in1) = $node_id AND r.trigger = true" \
             " WITH id(out) AS out_id, out.name AS out_name, out, CASE o.name" \
             "    WHEN '+' THEN in1.value + in2.value" \
             "    WHEN '-' THEN" \
