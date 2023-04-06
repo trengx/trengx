@@ -6,18 +6,47 @@
 # license information.
 # --------------------------------------------------------------------------
 
-import os
 import asyncio
 import uuid
 from azure.iot.device.aio import IoTHubDeviceClient
 from azure.iot.device import Message
 
-messages_to_send = 10
+messages_to_send = 1
+
+data= [{  
+  "id": "9af86784-8d40-fe2g-8b2a-bab65e106785",
+  "topic": "/SUBSCRIPTIONS/<subscription ID>/RESOURCEGROUPS/<resource group name>/PROVIDERS/MICROSOFT.DEVICES/IOTHUBS/<hub name>",
+  "subject": "devices/LogicAppTestDevice",
+  "eventType": "Microsoft.Devices.DeviceTelemetry",
+  "eventTime": "2019-01-07T20:58:30.48Z",
+  "data": {
+      "body": {
+          "Weather": {
+              "Temperature": 900
+            },
+            "Location": "USA"
+        },
+        "properties": {
+            "Status": "Active"
+        },
+        "systemProperties": {
+          "iothub-content-type": "application/json",
+          "iothub-content-encoding": "utf-8",
+          "iothub-connection-device-id": "d1",
+          "iothub-connection-auth-method": "{\"scope\":\"device\",\"type\":\"sas\",\"issuer\":\"iothub\",\"acceptingIpFilterRule\":null}",
+          "iothub-connection-auth-generation-id": "123455432199234570",
+          "iothub-enqueuedtime": "2019-01-07T20:58:30.48Z",
+          "iothub-message-source": "Telemetry"
+        }
+  },
+  "dataVersion": "",
+  "metadataVersion": "1"
+}]
 
 
 async def main():
     # The connection string for a device should never be stored in code. For the sake of simplicity we're using an environment variable here.
-    conn_str = os.getenv("HostName=trengx-iot-1.azure-devices.net;DeviceId=device-1;SharedAccessKey=bLCQkGzAi2HN5br22IK+qaheskevoy4jLXzIQ1XloWU=")
+    conn_str = "HostName=trengx-iot-1.azure-devices.net;DeviceId=device-1;SharedAccessKey=bLCQkGzAi2HN5br22IK+qaheskevoy4jLXzIQ1XloWU="
 
     # The client object is used to interact with your Azure IoT hub.
     device_client = IoTHubDeviceClient.create_from_connection_string(conn_str)
