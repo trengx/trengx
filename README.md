@@ -2,6 +2,8 @@
 Under Construction!
 
 "Transformer Made Easy for IoT"
+
+
 The trengx platform is constructed using an open-source project as its foundation.
 
 The integration of transformer-based models into IoT applications is made easier by the trengx platform, which is cloud-based and supported by libraries. The platform tackles implementation obstacles through the use of adaptive transformers and graph computation, all while leveraging existing IoT and graph technologies. With the number of IoT devices set to increase significantly from 9.7 billion in 2020 to over 29 billion by 2030 worldwide, the demand for the platform is expected to rise accordingly. The open-source project upon which trengx relies is currently being developed, and more information can be found at https://github.com/trengx/trengx.
