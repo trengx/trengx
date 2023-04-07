@@ -1,15 +1,16 @@
-import os 
-from neo4j import GraphDatabase as graphdb
+import os
 import sys
+from neo4j import GraphDatabase as graphdb
+
 sys.path.append('trengx')
 import graph
 
 # Codespaces secrets
 uri = os.environ['NEO4J_URI'] # Get the value of the uri variable
-user = os.environ.get("NEO4J_USER") # Get the value of the user variable
-password= os.getenv("NEO4J_PASSWORD")  # Get the value of the pw variable
+user = os.environ['NEO4J_USER'] # Get the value of the user variable
+password= os.environ['NEO4J_PASSWORD']  # Get the value of the pw variable
 
-# Create Graph Class
+# Create a Graph class instance
 g = graph.Graph(graphdb, uri, user, password)
 
 
