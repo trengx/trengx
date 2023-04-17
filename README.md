@@ -2,12 +2,16 @@
 Under Construction!
 
 "Transformer Made Easy for IoT"
+The trengx platform is constructed using an open-source project as its foundation (MIT License).
 
+1. Motivation
+ChatGPT's transformer technology reveals the potential for IoT applications by capturing intricate relationships within data sequences. The versatility of transformers enables their application to a wide array of sequence data, such as sensor and actuator signals, unveiling immense potential for IoT applications. The true challenge of IoT involves (1) facilitating interaction among devices to create a complex, interconnected system, and (2) empowering each device or the entire connected system to learn and adapt over time. These smart and connected IoT applications generate data streams with dynamic auto-correlation and cross-correlation, and such intricate, time-varying correlations are anticipated to be effectively captured by transformer technology, resulting in optimal prediction and control. As the number of IoT devices is expected to reach 29 billion by 2030, the Trengx platform aims to revolutionize the IoT sector by streamlining research and development in transformer-based technologies.
 
-The trengx platform is constructed using an open-source project as its foundation.
+2. Customer
+Trengx serves engineers, developers, scientists, and researchers across various sectors. It addresses challenges in transformer/IoT technology, helping customers focus on their primary goals.
 
-The integration of transformer-based models into IoT applications is made easier by the trengx platform, which is cloud-based and supported by libraries. The platform tackles implementation obstacles through the use of adaptive transformers and graph computation, all while leveraging existing IoT and graph technologies. With the number of IoT devices set to increase significantly from 9.7 billion in 2020 to over 29 billion by 2030 worldwide, the demand for the platform is expected to rise accordingly. The open-source project upon which trengx relies is currently being developed.
+3. Value Proposition
+Trengx offers adaptive transformer and graph computation methods, providing significant societal benefits across industries. It emphasizes human values and collaborates with NGOs and governments to develop safe, fair, and inclusive AI policies.
 
-The emergence of large language models like ChatGPT in recent years has had a significant impact on society, demonstrating a level of knowledge and contextual understanding that rivals or even surpasses that of humans. The success of these language models can be attributed to transformer technology, which uses contextual embeddings to capture intricate relationships within lengthy sequences of words. As a general-purpose technology, transformers can be applied not only to language but also to any sequence data, including sensor measurements. 
-
-With trengx serving as a foundation, digital signal processing and control engineers can quickly experiment with transformer-based models, accelerating the process of developing novel IoT applications. This proves particularly beneficial for individuals lacking expertise in deep learning or cloud computing, yet keen to leverage these potent technologies.
+4. Innovation
+Trengx uses an adaptive transformer model and graph computation methods for IoT applications, overcoming limitations of matrix computations. It enables IoT engineers to build and manage adaptive systems within the "digital twins" framework.
