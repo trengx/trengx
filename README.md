@@ -1,7 +1,8 @@
 # trengx
 Under Construction!
 
-"Transformer Made Easy for IoT"
+"Transformers Made Easy for IoT"
+
 The trengx platform is constructed using an open-source project as its foundation (MIT License).
 
 1. Motivation
