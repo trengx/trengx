@@ -20,3 +20,6 @@ Trengx offers adaptive transformer and graph computation methods, providing sign
 4. Innovation
 
 Trengx uses an adaptive transformer model and graph computation methods for IoT applications, overcoming limitations of matrix computations. It enables IoT engineers to build and manage adaptive systems within the "digital twins" framework.
+
+![Picture1](https://user-images.githubusercontent.com/128947466/233489290-fba699d2-3d62-4034-8b2b-7b5804a08214.png)
+
