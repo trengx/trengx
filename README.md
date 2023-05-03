@@ -3,7 +3,7 @@ Under Construction!
 
 "Transformers Made Easy for IoT"
 
-The Trengx platform is constructed using an open-source project as its foundation (MIT License).
+The Trengx platform is constructed using an open-source project as its foundation (GNU GPL License).
 
 
 1. The Motivation
