@@ -61,110 +61,64 @@ class Graph:
                 return None
             return result
 
-    # Perform math operation
-    @staticmethod
-    def _do_math_tx(tx, node_id:int):
-        query = "MATCH (in1)-[r:num2op]->(o:op)" \
-            " OPTIONAL MATCH (in1)-[r:num2op]->(o)<-[:num2op]-(in2)" \
-            " MATCH (o)-[:op2num]->(out)" \
-            " WHERE id(in1) = $node_id AND r.trigger = true" \
-            " WITH id(out) AS out_id, out.name AS out_name, out, CASE o.name" \
-            "    WHEN '+' THEN in1.value + in2.value" \
-            "    WHEN '-' THEN" \
-            "       CASE WHEN o.reverse THEN in2.value - in1.value ELSE in1.value - in2.value END" \
-            "    WHEN '*' THEN in1.value * in2.value" \
-            "    WHEN '/' THEN" \
-            "       CASE WHEN o.reverse THEN in2.value / in1.value ELSE in1.value / in2.value END" \
-            "    WHEN '%' THEN" \
-            "       CASE WHEN o.reverse THEN in2.value % in1.value ELSE in1.value % in2.value END" \
-            "    WHEN '^' THEN" \
-            "       CASE WHEN o.reverse THEN in2.value ^ in1.value ELSE in1.value ^ in2.value END" \
-            "    WHEN 'sqrt' THEN sqrt(in1.value)" \
-            "    WHEN 'abs' THEN abs(in1.value)" \
-            "    WHEN 'exp' THEN exp(in1.value)" \
-            "    WHEN 'log10' THEN log10(in1.value)" \
-            "    WHEN 'log' THEN log(in1.value)" \
-            "    WHEN 'sin' THEN sin(in1.value)" \
-            "    WHEN 'cos' THEN cos(in1.value)" \
-            "    WHEN 'tan' THEN tan(in1.value)" \
-            "    WHEN 'ceil' THEN ceil(in1.value)" \
-            "    WHEN 'floor' THEN floor(in1.value)" \
-            "    WHEN 'round' THEN round(in1.value)" \
-            "    WHEN 'sign' THEN sign(in1.value)" \
-            "    ELSE out.value" \
-            " END AS value" \
-            " SET out.value = value" \
-            " RETURN out_id, out_name, out.value AS out_value"
-        result = tx.run(query, node_id=node_id).data()
-        for record in result:
-            out_id = record['out_id']
-            out_name = record['out_name']
-            out_value = record['out_value']
-            print(f'out_id: {out_id}')
-            print(f'out_name: {out_name}')
-            print(f'out_value: {out_value}')
-        return out_id, out_name, out_value
-
-    def do_math(self, node_id:int):
-        """Function for doing math"""
-        with self.driver.session() as session:
-            result = session.execute_write(self._do_math_tx, node_id)
-            self.set_node_prop(result[0], result[1], result[2], True)
-            return result
-
-    # Check the presence of outgoing edge
-    @staticmethod
-    def _check_outgoing_edge_tx(tx, node_id):
-        query = "MATCH (n)-[label:num2op]->()" \
-                " WHERE id(n) = $node_id" \
-                " RETURN COUNT(label) > 0 as has_outgoing_label"
-        result = tx.run(query, node_id=node_id)
-        has_outgoing_edge = result.single()[0]
-        return has_outgoing_edge
-
-    def check_outgoing_edge(self, node_id:int):
-        """Function for checking the presence of outgoing edge"""
-        with self.driver.session() as session:
-            result = session.execute_write(self._check_outgoing_edge_tx, node_id)
-            return result 
-    
-    # Set node property value
     @staticmethod
     def _set_node_prop_tx(tx, node_id:int, key:str, value):
-        query = "MATCH (n) WHERE id(n) = $node_id" \
-                " SET n." + key + " = $value" \
-                " RETURN n" 
-        result = tx.run(query, node_id=node_id, value=value)
+        query = """
+            MATCH (n)
+            WHERE id(n) = $node_id
+            OPTIONAL MATCH (n)-[r:num2op {trigger:true}]->(o:op)<-[:num2op]-(in2)
+            OPTIONAL MATCH (o)-[:op2num]->(out)
+            WITH 
+                n, 
+                o, 
+                in2, 
+                out,
+                CASE 
+                    WHEN r IS NULL THEN false 
+                    ELSE true 
+                END as has_outgoing_edge,
+                CASE o.name
+                    WHEN '+' THEN n.value + in2.value
+                    WHEN '-' THEN 
+                        CASE WHEN o.reverse THEN in2.value - n.value ELSE n.value - in2.value END
+                    WHEN '*' THEN n.value * in2.value
+                    WHEN '/' THEN
+                        CASE WHEN o.reverse THEN in2.value / n.value ELSE n.value / in2.value END
+                END AS math_result
+            CALL apoc.create.setProperty(n, $key, CASE
+                WHEN has_outgoing_edge THEN math_result
+                ELSE $value
+                END) YIELD node
+            RETURN id(node) as node_id, node
+        """
+        result = tx.run(query, node_id=node_id, key=key, value=value)
         record = result.single()
-        node = record['n']
+        node = record['node']
         node_properties = dict(node.items())
-        return {'node_id': node.id, 'properties': node_properties}
-    
-    def set_node_prop(self, node_id:int, key:str, value, do_math):
-        """Function for setting node property value"""
-        results = []
+        return {'node_id': record['node_id'], 'properties': node_properties}
+
+    def set_node_prop(self, node_id:int, key:str, value):
         with self.driver.session() as session:
-            result1 = session.execute_write(self._set_node_prop_tx, node_id, key, value)
-            results.append(result1)
-            if do_math is True:
-                outgoing_edge = self.check_outgoing_edge(node_id)
-                if outgoing_edge is True:
-                    result2 = self.do_math(node_id)
-                    results.append(result2)
-        return results
+            result = session.execute_write(self._set_node_prop_tx, node_id, key, value)
+            return result
 
-    # Get node property value
     @staticmethod
-    def _get_node_prop_tx(tx, node_id, key):
-        query = "MATCH (n) WHERE id(n) = $node_ide RETURN n.$key as value"
+    def _get_node_prop_tx(tx, node_id:int, key:str):
+        query = """
+            MATCH (n) 
+            WHERE id(n) = $node_id
+            RETURN apoc.map.values(n, [$key])[0] as value
+        """
         result = tx.run(query, node_id=node_id, key=key)
-        return result.single()[0]
+        record = result.single()
+        return record['value']
 
-    def get_node_prop(self, node_id, key):
+    def get_node_prop(self, node_id:int, key:str):
         """Function for getting node property value using node ID"""
         with self.driver.session() as session:
-            result = session.execute_write(self._get_node_prop_tx, node_id, key)
+            result = session.execute_read(self._get_node_prop_tx, node_id, key)
             return result
+
     
     # Remove node property
     @staticmethod
