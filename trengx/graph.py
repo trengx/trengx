@@ -62,44 +62,66 @@ class Graph:
             return result
 
     @staticmethod
-    def _set_node_prop_tx(tx, node_id:int, key:str, value):
-        query = """
-            MATCH (n)
-            WHERE id(n) = $node_id
-            OPTIONAL MATCH (n)-[r:num2op {trigger:true}]->(o:op)<-[:num2op]-(in2)
-            OPTIONAL MATCH (o)-[:op2num]->(out)
-            WITH 
-                n, 
-                o, 
-                in2, 
-                out,
-                CASE 
-                    WHEN r IS NULL THEN false 
-                    ELSE true 
-                END as has_outgoing_edge,
-                CASE o.name
-                    WHEN '+' THEN n.value + in2.value
-                    WHEN '-' THEN 
-                        CASE WHEN o.reverse THEN in2.value - n.value ELSE n.value - in2.value END
-                    WHEN '*' THEN n.value * in2.value
-                    WHEN '/' THEN
-                        CASE WHEN o.reverse THEN in2.value / n.value ELSE n.value / in2.value END
-                END AS math_result
-            CALL apoc.create.setProperty(n, $key, CASE
-                WHEN has_outgoing_edge THEN math_result
-                ELSE $value
-                END) YIELD node
-            RETURN id(node) as node_id, node
+    def _set_node_value_tx(tx, node_id:int, value):
         """
-        result = tx.run(query, node_id=node_id, key=key, value=value)
-        record = result.single()
-        node = record['node']
-        node_properties = dict(node.items())
-        return {'node_id': record['node_id'], 'properties': node_properties}
+        node id 'node_id' and node property 'value' are given:
+        1. Find a node 'n' with a specific identifier. This node is labelled 'num' and 
+        its identifier is given by the variable 'node_id'.
+        2. (Optional) Find an edge (r) labelled 'num2op' and marked as 'trigger:true', that
+        links our found node 'n' to another node 'o' labelled 'op'.  
+        3. (Optional) Find an edge labelled 'num2op' that links another node 'in2' labelled 'num' to the node 'op'.
+        4. (Optional) Find an edge labeled 'op2num' that links the node 'op' to another node 'out' labelled 'num'
+        5. If there is an outgoing edge from 'n' or the outgoing edge is marked as 'trigger:false', set the value 
+        of 'n' to a provided node property 'value'.
+        6. If there is an outgoing edge from 'n' or the outgoing edge is marked as 'trigger:true', 
+        perform a mathematical operation depending on the 'name' property of the 'op' node. 
+        The operations include addition, subtraction, multiplication, and division. If the operation is subtraction 
+        or division, it also checks if the 'op' node has a 'reverse' property. If 'reverse' is true, the operation's 
+        operands are switched. The result of every mathematical operation is then set as the value of the 'out' node.
+        """
+        query = """
+            MATCH (n) WHERE id(n) = $node_id
+            OPTIONAL MATCH (n)-[r:num2op]->(o:op)<-[:num2op]-(in2:num), (o)-[:op2num]->(out:num)
 
-    def set_node_prop(self, node_id:int, key:str, value):
+            SET n.value = $value,
+                out.value = CASE
+                            WHEN r IS NOT NULL AND r.trigger = true THEN
+                                CASE
+                                    WHEN o.name = '+' THEN n.value + in2.value
+                                    WHEN o.name = '-' AND (o.reverse = true) THEN in2.value - n.value
+                                    WHEN o.name = '-' AND (o.reverse = false) THEN n.value - in2.value
+                                    WHEN o.name = '*' THEN n.value * in2.value
+                                    WHEN o.name = '/' AND (o.reverse = true) AND (n.value <> 0) THEN in2.value / n.value
+                                    WHEN o.name = '/' AND (o.reverse = false) AND (in2.value <> 0) THEN n.value / in2.value
+                                END
+                            ELSE out.value
+                            END
+            RETURN ID(n) as n_id, n as n_node, ID(out) as out_id, out as out_node
+            """
+
+        result = tx.run(query, node_id=node_id, value=value)
+        record = result.single()
+
+        if record is None:
+            return {'error': 'None is returned.'}
+
+        record = {
+            'n_node': {
+                'node_id': record['n_id'], 
+                'properties': dict(record['n_node'].items()) if record['n_node'] is not None else None 
+            },
+            'out_node': {
+                'node_id': record['out_id'], 
+                'properties': dict(record['out_node'].items()) if record['out_node'] is not None else None 
+            }
+        }
+        return record
+
+    
+
+    def set_node_value(self, node_id:int, value):
         with self.driver.session() as session:
-            result = session.execute_write(self._set_node_prop_tx, node_id, key, value)
+            result = session.execute_write(self._set_node_value_tx, node_id, value)
             return result
 
     @staticmethod
