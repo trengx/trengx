@@ -11,6 +11,14 @@ class Graph:
         """Function for session closing"""
         self.driver.close()
 
+    # Run any Cypher query
+    def run_query(self, query, parameters=None):
+        """Function for running arbitrary Cypher query
+        Query parameters should be given as a dictionary"""
+        with self.driver.session() as session:
+            result = session.run(query, parameters)
+            return [record.data() for record in result]
+
     # Add node
     @staticmethod
     def _add_node_tx(tx, node_label:str, name:str, properties:dict, merge:bool):
@@ -79,25 +87,65 @@ class Graph:
         or division, it also checks if the 'op' node has a 'reverse' property. If 'reverse' is true, the operation's 
         operands are switched. The result of every mathematical operation is then set as the value of the 'out' node.
         """
+
         query = """
+        CALL apoc.cypher.run("
             MATCH (n) WHERE id(n) = $node_id
             OPTIONAL MATCH (n)-[r:num2op]->(o:op)<-[:num2op]-(in2:num), (o)-[:op2num]->(out:num)
-
+            WITH n, r, o, in2, out,
+                CASE
+                    WHEN o.name = '+' THEN n.value + in2.value
+                    WHEN o.name = '-' AND (o.reverse = true) THEN in2.value - n.value
+                    WHEN o.name = '-' AND (o.reverse = false) THEN n.value - in2.value
+                    WHEN o.name = '*' THEN n.value * in2.value
+                    WHEN o.name = '/' AND (o.reverse = true) AND (n.value <> 0) THEN in2.value / n.value
+                    WHEN o.name = '/' AND (o.reverse = false) AND (in2.value <> 0) THEN n.value / in2.value
+                    ELSE n.value
+                END AS new_value,
+                r IS NOT NULL AND r.trigger = true AS continue
             SET n.value = $value,
                 out.value = CASE
-                            WHEN r IS NOT NULL AND r.trigger = true THEN
-                                CASE
-                                    WHEN o.name = '+' THEN n.value + in2.value
-                                    WHEN o.name = '-' AND (o.reverse = true) THEN in2.value - n.value
-                                    WHEN o.name = '-' AND (o.reverse = false) THEN n.value - in2.value
-                                    WHEN o.name = '*' THEN n.value * in2.value
-                                    WHEN o.name = '/' AND (o.reverse = true) AND (n.value <> 0) THEN in2.value / n.value
-                                    WHEN o.name = '/' AND (o.reverse = false) AND (in2.value <> 0) THEN n.value / in2.value
-                                END
-                            ELSE out.value
-                            END
-            RETURN ID(n) as n_id, n as n_node, ID(out) as out_id, out as out_node
-            """
+                    WHEN continue THEN new_value
+                    ELSE out.value
+                END
+            RETURN continue, n, out
+        ", { node_id: $node_id, value: $value })
+        YIELD value
+        WITH value.continue AS continue, value.n AS n_node, value.out AS out_node
+        CALL apoc.do.when(
+            continue,
+            "
+            CALL apoc.cypher.run(\"
+                MATCH (n)-[r:num2op]->(o:op)<-[:num2op]-(in2:num), (o)-[:op2num]->(out:num)
+                WHERE EXISTS((out)-[:num2op]->(:op)<-[:num2op]-(:num))
+                WITH n, r, o, in2, out,
+                    CASE
+                        WHEN o.name = '+' THEN n.value + in2.value
+                        WHEN o.name = '-' AND (o.reverse = true) THEN in2.value - n.value
+                        WHEN o.name = '-' AND (o.reverse = false) THEN n.value - in2.value
+                        WHEN o.name = '*' THEN n.value * in2.value
+                        WHEN o.name = '/' AND (o.reverse = true) AND (n.value <> 0) THEN in2.value / n.value
+                        WHEN o.name = '/' AND (o.reverse = false) AND (in2.value <> 0) THEN n.value / in2.value
+                        ELSE n.value
+                    END AS new_value,
+                    r IS NOT NULL AND r.trigger = true AS continue
+                SET n.value = $value,
+                    out.value = CASE
+                        WHEN continue THEN new_value
+                        ELSE out.value
+                    END
+                RETURN continue, n, out
+            \", { value: $value })
+            YIELD value
+            RETURN value.continue AS updated, value.n AS n_node, value.out AS out_node
+            ",
+            { continue: continue, n_node: n_node, out_node: out_node }
+        ) YIELD value
+        RETURN value.updated AS updated, value.n_node AS n_node, value.out_node AS out_node
+        """
+
+
+
 
         result = tx.run(query, node_id=node_id, value=value)
         record = result.single()
