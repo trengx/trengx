@@ -72,105 +72,60 @@ class Graph:
     @staticmethod
     def _set_node_value_tx(tx, node_id:int, value):
         """
-        node id 'node_id' and node property 'value' are given:
-        1. Find a node 'n' with a specific identifier. This node is labelled 'num' and 
-        its identifier is given by the variable 'node_id'.
-        2. (Optional) Find an edge (r) labelled 'num2op' and marked as 'trigger:true', that
-        links our found node 'n' to another node 'o' labelled 'op'.  
-        3. (Optional) Find an edge labelled 'num2op' that links another node 'in2' labelled 'num' to the node 'op'.
-        4. (Optional) Find an edge labeled 'op2num' that links the node 'op' to another node 'out' labelled 'num'
-        5. If there is an outgoing edge from 'n' or the outgoing edge is marked as 'trigger:false', set the value 
-        of 'n' to a provided node property 'value'.
-        6. If there is an outgoing edge from 'n' or the outgoing edge is marked as 'trigger:true', 
-        perform a mathematical operation depending on the 'name' property of the 'op' node. 
-        The operations include addition, subtraction, multiplication, and division. If the operation is subtraction 
-        or division, it also checks if the 'op' node has a 'reverse' property. If 'reverse' is true, the operation's 
-        operands are switched. The result of every mathematical operation is then set as the value of the 'out' node.
-        """
+        1. MATCH path = (in1)-[r:num2op|op2num*0..]->() WHERE id(in1) = $node_id AND all(rel IN relationships(path) WHERE rel.trigger = true):
+        Find a path that begins from a node (in1) which has the ID specified by the parameter node_id. 
+        The path can include any number of num2op or op2num relationships (from none at all, up to an infinite number, 
+        denoted by *0..). The num2op relationship likely signifies the operation to perform on a number 
+        and the op2num relationship likely represents the number to perform the operation on. 
+        The WHERE clause ensures all relationships in this path have a trigger property that is true.
 
+        2. WITH path ORDER BY length(path) DESC LIMIT 1 WITH nodes(path) AS nodes:
+        This statement orders all found paths by their length in descending order and limits the result to the longest path. 
+        Then, the nodes of this longest path are collected into a list called nodes.
+
+        3. UNWIND range(0, size(nodes)-2, 2) AS i WITH nodes[i] AS in1, nodes[i+1] AS op, nodes[i+2] AS out:
+        The UNWIND statement creates a new row for each value in the range from 0 to the size of nodes - 2, stepping by 2. 
+        This is used to group the nodes into triples (in1, op, out).
+
+        4. MATCH (in1)-[:num2op]->(op)-[:op2num]->(out) OPTIONAL MATCH (in2)-[:num2op]->(op) WHERE id(in2) <> id(in1):
+        The script then matches these triples to actual paths in the graph. It also optionally matches another node in2 that connects 
+        to op with a num2op relationship, provided in2 is not the same as in1.
+
+        5. WITH in1, op, out, in2 SET out.value = CASE ... END:
+        Depending on the op.name (the name of the operation), this part updates out.value (the result of the operation). 
+        For subtraction and division, it also considers a reverse property on the operation node to decide the order of the operands. 
+        If op.name is none of the given, it leaves out.value as it was.
+        """
         query = """
-        CALL apoc.cypher.run("
-            MATCH (n) WHERE id(n) = $node_id
-            OPTIONAL MATCH (n)-[r:num2op]->(o:op)<-[:num2op]-(in2:num), (o)-[:op2num]->(out:num)
-            WITH n, r, o, in2, out,
-                CASE
-                    WHEN o.name = '+' THEN n.value + in2.value
-                    WHEN o.name = '-' AND (o.reverse = true) THEN in2.value - n.value
-                    WHEN o.name = '-' AND (o.reverse = false) THEN n.value - in2.value
-                    WHEN o.name = '*' THEN n.value * in2.value
-                    WHEN o.name = '/' AND (o.reverse = true) AND (n.value <> 0) THEN in2.value / n.value
-                    WHEN o.name = '/' AND (o.reverse = false) AND (in2.value <> 0) THEN n.value / in2.value
-                    ELSE n.value
-                END AS new_value,
-                r IS NOT NULL AND r.trigger = true AS continue
-            SET n.value = $value,
-                out.value = CASE
-                    WHEN continue THEN new_value
-                    ELSE out.value
-                END
-            RETURN continue, n, out
-        ", { node_id: $node_id, value: $value })
-        YIELD value
-        WITH value.continue AS continue, value.n AS n_node, value.out AS out_node
-        CALL apoc.do.when(
-            continue,
-            "
-            CALL apoc.cypher.run(\"
-                MATCH (n)-[r:num2op]->(o:op)<-[:num2op]-(in2:num), (o)-[:op2num]->(out:num)
-                WHERE EXISTS((out)-[:num2op]->(:op)<-[:num2op]-(:num))
-                WITH n, r, o, in2, out,
-                    CASE
-                        WHEN o.name = '+' THEN n.value + in2.value
-                        WHEN o.name = '-' AND (o.reverse = true) THEN in2.value - n.value
-                        WHEN o.name = '-' AND (o.reverse = false) THEN n.value - in2.value
-                        WHEN o.name = '*' THEN n.value * in2.value
-                        WHEN o.name = '/' AND (o.reverse = true) AND (n.value <> 0) THEN in2.value / n.value
-                        WHEN o.name = '/' AND (o.reverse = false) AND (in2.value <> 0) THEN n.value / in2.value
-                        ELSE n.value
-                    END AS new_value,
-                    r IS NOT NULL AND r.trigger = true AS continue
-                SET n.value = $value,
-                    out.value = CASE
-                        WHEN continue THEN new_value
-                        ELSE out.value
-                    END
-                RETURN continue, n, out
-            \", { value: $value })
-            YIELD value
-            RETURN value.continue AS updated, value.n AS n_node, value.out AS out_node
-            ",
-            { continue: continue, n_node: n_node, out_node: out_node }
-        ) YIELD value
-        RETURN value.updated AS updated, value.n_node AS n_node, value.out_node AS out_node
+            MATCH path = (in1)-[r:num2op|op2num*0..]->()
+            WHERE id(in1) = $node_id AND all(rel IN relationships(path) WHERE rel.trigger = true)
+            WITH path
+            ORDER BY length(path) DESC
+            LIMIT 1
+            WITH nodes(path) AS nodes
+            UNWIND range(0, size(nodes)-2, 2) AS i
+            WITH nodes[i] AS in1, nodes[i+1] AS op, nodes[i+2] AS out
+            MATCH (in1)-[:num2op]->(op)-[:op2num]->(out)
+            OPTIONAL MATCH (in2)-[:num2op]->(op)
+            WHERE id(in2) <> id(in1)  
+            WITH in1, op, out, in2
+            SET out.value = 
+            CASE 
+                WHEN op.name = '+' THEN in1.value + in2.value
+                WHEN op.name = '-' AND op.reverse = false THEN in1.value - in2.value
+                WHEN op.name = '-' AND op.reverse = true THEN in2.value - in1.value
+                WHEN op.name = '*' THEN in1.value * in2.value
+                WHEN op.name = '/' AND op.reverse = false THEN in1.value / in2.value
+                WHEN op.name = '/' AND op.reverse = true THEN in2.value / in1.value
+                WHEN op.name = 'round' THEN round(in1.value)
+                ELSE out.value
+            END
         """
-
-
-
-
-        result = tx.run(query, node_id=node_id, value=value)
-        record = result.single()
-
-        if record is None:
-            return {'error': 'None is returned.'}
-
-        record = {
-            'n_node': {
-                'node_id': record['n_id'], 
-                'properties': dict(record['n_node'].items()) if record['n_node'] is not None else None 
-            },
-            'out_node': {
-                'node_id': record['out_id'], 
-                'properties': dict(record['out_node'].items()) if record['out_node'] is not None else None 
-            }
-        }
-        return record
-
-    
+        tx.run(query, node_id=node_id, value=value)
 
     def set_node_value(self, node_id:int, value):
         with self.driver.session() as session:
-            result = session.execute_write(self._set_node_value_tx, node_id, value)
-            return result
+            session.execute_write(self._set_node_value_tx, node_id, value)
 
     @staticmethod
     def _get_node_prop_tx(tx, node_id:int, key:str):
