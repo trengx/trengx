@@ -11,6 +11,14 @@ class Graph:
         """Function for session closing"""
         self.driver.close()
 
+    # Run any Cypher query
+    def run_query(self, query, parameters=None):
+        """Function for running arbitrary Cypher query
+        Query parameters should be given as a dictionary"""
+        with self.driver.session() as session:
+            result = session.run(query, parameters)
+            return [record.data() for record in result]
+
     # Add node
     @staticmethod
     def _add_node_tx(tx, node_label:str, name:str, properties:dict, merge:bool):
@@ -61,110 +69,81 @@ class Graph:
                 return None
             return result
 
-    # Perform math operation
     @staticmethod
-    def _do_math_tx(tx, node_id:int):
-        query = "MATCH (in1)-[r:num2op]->(o:op)" \
-            " OPTIONAL MATCH (in1)-[r:num2op]->(o)<-[:num2op]-(in2)" \
-            " MATCH (o)-[:op2num]->(out)" \
-            " WHERE id(in1) = $node_id AND r.trigger = true" \
-            " WITH id(out) AS out_id, out.name AS out_name, out, CASE o.name" \
-            "    WHEN '+' THEN in1.value + in2.value" \
-            "    WHEN '-' THEN" \
-            "       CASE WHEN o.reverse THEN in2.value - in1.value ELSE in1.value - in2.value END" \
-            "    WHEN '*' THEN in1.value * in2.value" \
-            "    WHEN '/' THEN" \
-            "       CASE WHEN o.reverse THEN in2.value / in1.value ELSE in1.value / in2.value END" \
-            "    WHEN '%' THEN" \
-            "       CASE WHEN o.reverse THEN in2.value % in1.value ELSE in1.value % in2.value END" \
-            "    WHEN '^' THEN" \
-            "       CASE WHEN o.reverse THEN in2.value ^ in1.value ELSE in1.value ^ in2.value END" \
-            "    WHEN 'sqrt' THEN sqrt(in1.value)" \
-            "    WHEN 'abs' THEN abs(in1.value)" \
-            "    WHEN 'exp' THEN exp(in1.value)" \
-            "    WHEN 'log10' THEN log10(in1.value)" \
-            "    WHEN 'log' THEN log(in1.value)" \
-            "    WHEN 'sin' THEN sin(in1.value)" \
-            "    WHEN 'cos' THEN cos(in1.value)" \
-            "    WHEN 'tan' THEN tan(in1.value)" \
-            "    WHEN 'ceil' THEN ceil(in1.value)" \
-            "    WHEN 'floor' THEN floor(in1.value)" \
-            "    WHEN 'round' THEN round(in1.value)" \
-            "    WHEN 'sign' THEN sign(in1.value)" \
-            "    ELSE out.value" \
-            " END AS value" \
-            " SET out.value = value" \
-            " RETURN out_id, out_name, out.value AS out_value"
-        result = tx.run(query, node_id=node_id).data()
-        for record in result:
-            out_id = record['out_id']
-            out_name = record['out_name']
-            out_value = record['out_value']
-            print(f'out_id: {out_id}')
-            print(f'out_name: {out_name}')
-            print(f'out_value: {out_value}')
-        return out_id, out_name, out_value
+    def _set_node_value_tx(tx, node_id:int, value):
+        """
+        1. MATCH path = (in1)-[r:num2op|op2num*0..]->() WHERE id(in1) = $node_id AND all(rel IN relationships(path) WHERE rel.trigger = true):
+        Find a path that begins from a node (in1) which has the ID specified by the parameter node_id. 
+        The path can include any number of num2op or op2num relationships (from none at all, up to an infinite number, 
+        denoted by *0..). The num2op relationship likely signifies the operation to perform on a number 
+        and the op2num relationship likely represents the number to perform the operation on. 
+        The WHERE clause ensures all relationships in this path have a trigger property that is true.
 
-    def do_math(self, node_id:int):
-        """Function for doing math"""
+        2. WITH path ORDER BY length(path) DESC LIMIT 1 WITH nodes(path) AS nodes:
+        This statement orders all found paths by their length in descending order and limits the result to the longest path. 
+        Then, the nodes of this longest path are collected into a list called nodes.
+
+        3. UNWIND range(0, size(nodes)-2, 2) AS i WITH nodes[i] AS in1, nodes[i+1] AS op, nodes[i+2] AS out:
+        The UNWIND statement creates a new row for each value in the range from 0 to the size of nodes - 2, stepping by 2. 
+        This is used to group the nodes into triples (in1, op, out).
+
+        4. MATCH (in1)-[:num2op]->(op)-[:op2num]->(out) OPTIONAL MATCH (in2)-[:num2op]->(op) WHERE id(in2) <> id(in1):
+        The script then matches these triples to actual paths in the graph. It also optionally matches another node in2 that connects 
+        to op with a num2op relationship, provided in2 is not the same as in1.
+
+        5. WITH in1, op, out, in2 SET out.value = CASE ... END:
+        Depending on the op.name (the name of the operation), this part updates out.value (the result of the operation). 
+        For subtraction and division, it also considers a reverse property on the operation node to decide the order of the operands. 
+        If op.name is none of the given, it leaves out.value as it was.
+        """
+        query = """
+            MATCH path = (in1)-[r:num2op|op2num*0..]->()
+            WHERE id(in1) = $node_id AND all(rel IN relationships(path) WHERE rel.trigger = true)
+            WITH path
+            ORDER BY length(path) DESC
+            LIMIT 1
+            WITH nodes(path) AS nodes
+            UNWIND range(0, size(nodes)-2, 2) AS i
+            WITH nodes[i] AS in1, nodes[i+1] AS op, nodes[i+2] AS out
+            MATCH (in1)-[:num2op]->(op)-[:op2num]->(out)
+            OPTIONAL MATCH (in2)-[:num2op]->(op)
+            WHERE id(in2) <> id(in1)  
+            WITH in1, op, out, in2
+            SET out.value = 
+            CASE 
+                WHEN op.name = '+' THEN in1.value + in2.value
+                WHEN op.name = '-' AND op.reverse = false THEN in1.value - in2.value
+                WHEN op.name = '-' AND op.reverse = true THEN in2.value - in1.value
+                WHEN op.name = '*' THEN in1.value * in2.value
+                WHEN op.name = '/' AND op.reverse = false THEN in1.value / in2.value
+                WHEN op.name = '/' AND op.reverse = true THEN in2.value / in1.value
+                WHEN op.name = 'round' THEN round(in1.value)
+                ELSE out.value
+            END
+        """
+        tx.run(query, node_id=node_id, value=value)
+
+    def set_node_value(self, node_id:int, value):
         with self.driver.session() as session:
-            result = session.execute_write(self._do_math_tx, node_id)
-            self.set_node_prop(result[0], result[1], result[2], True)
-            return result
+            session.execute_write(self._set_node_value_tx, node_id, value)
 
-    # Check the presence of outgoing edge
     @staticmethod
-    def _check_outgoing_edge_tx(tx, node_id):
-        query = "MATCH (n)-[label:num2op]->()" \
-                " WHERE id(n) = $node_id" \
-                " RETURN COUNT(label) > 0 as has_outgoing_label"
-        result = tx.run(query, node_id=node_id)
-        has_outgoing_edge = result.single()[0]
-        return has_outgoing_edge
-
-    def check_outgoing_edge(self, node_id:int):
-        """Function for checking the presence of outgoing edge"""
-        with self.driver.session() as session:
-            result = session.execute_write(self._check_outgoing_edge_tx, node_id)
-            return result 
-    
-    # Set node property value
-    @staticmethod
-    def _set_node_prop_tx(tx, node_id:int, key:str, value):
-        query = "MATCH (n) WHERE id(n) = $node_id" \
-                " SET n." + key + " = $value" \
-                " RETURN n" 
-        result = tx.run(query, node_id=node_id, value=value)
-        record = result.single()
-        node = record['n']
-        node_properties = dict(node.items())
-        return {'node_id': node.id, 'properties': node_properties}
-    
-    def set_node_prop(self, node_id:int, key:str, value, do_math):
-        """Function for setting node property value"""
-        results = []
-        with self.driver.session() as session:
-            result1 = session.execute_write(self._set_node_prop_tx, node_id, key, value)
-            results.append(result1)
-            if do_math is True:
-                outgoing_edge = self.check_outgoing_edge(node_id)
-                if outgoing_edge is True:
-                    result2 = self.do_math(node_id)
-                    results.append(result2)
-        return results
-
-    # Get node property value
-    @staticmethod
-    def _get_node_prop_tx(tx, node_id, key):
-        query = "MATCH (n) WHERE id(n) = $node_ide RETURN n.$key as value"
+    def _get_node_prop_tx(tx, node_id:int, key:str):
+        query = """
+            MATCH (n) 
+            WHERE id(n) = $node_id
+            RETURN apoc.map.values(n, [$key])[0] as value
+        """
         result = tx.run(query, node_id=node_id, key=key)
-        return result.single()[0]
+        record = result.single()
+        return record['value']
 
-    def get_node_prop(self, node_id, key):
+    def get_node_prop(self, node_id:int, key:str):
         """Function for getting node property value using node ID"""
         with self.driver.session() as session:
-            result = session.execute_write(self._get_node_prop_tx, node_id, key)
+            result = session.execute_read(self._get_node_prop_tx, node_id, key)
             return result
+
     
     # Remove node property
     @staticmethod
