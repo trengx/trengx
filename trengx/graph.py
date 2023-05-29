@@ -41,7 +41,7 @@ class Graph:
         result = tx.run(query, name=name, properties=properties).single()
         node = result['n']
         node_properties = dict(node.items())
-        return {'node_id': node.id, 'node_label': node.labels, 'properties': node_properties}
+        return {'id': node.id, 'label': node.labels, 'properties': node_properties}
 
     def add_node(self, node_label:str, name:str, properties:dict, merge=False):
         """Function for creating or merging node
@@ -97,8 +97,12 @@ class Graph:
         If op.name is none of the given, it leaves out.value as it was.
         """
         query = """
+            MATCH (in1)
+            WHERE id(in1) = $node_id
+            SET in1.value = $value
+            WITH in1
             MATCH path = (in1)-[r:num2op|op2num*0..]->()
-            WHERE id(in1) = $node_id AND all(rel IN relationships(path) WHERE rel.trigger = true)
+            WHERE all(rel IN relationships(path) WHERE rel.trigger = true)
             WITH path
             ORDER BY length(path) DESC
             LIMIT 1
@@ -118,6 +122,19 @@ class Graph:
                 WHEN op.name = '/' AND op.reverse = false THEN in1.value / in2.value
                 WHEN op.name = '/' AND op.reverse = true THEN in2.value / in1.value
                 WHEN op.name = 'round' THEN round(in1.value)
+                WHEN op.name = 'sqrt' THEN sqrt(in1.value)
+                WHEN op.name = 'abs' THEN abs(in1.value)
+                WHEN op.name = 'exp' THEN exp(in1.value)
+                WHEN op.name = 'log10' THEN log10(in1.value)
+                WHEN op.name = 'log' THEN log(in1.value)
+                WHEN op.name = 'sin' THEN sin(in1.value)
+                WHEN op.name = 'cos' THEN cos(in1.value)
+                WHEN op.name = 'tan' THEN tan(in1.value)
+                WHEN op.name = 'ceil' THEN ceil(in1.value)
+                WHEN op.name = 'floor' THEN floor(in1.value)
+                WHEN op.name = 'round' THEN round(in1.value)
+                WHEN op.name = 'sign' THEN sign(in1.value)
+                WHEN op.name = 'store' THEN in1.value
                 ELSE out.value
             END
         """
@@ -181,6 +198,26 @@ class Graph:
         with self.driver.session() as session:
             result = session.write_transaction(self._add_edge_tx, edge_label, out_id, in_id, properties, merge)
             return result
+
+    # Update edge properties
+    @staticmethod
+    def _update_edge_properties_tx(tx, edge_label:str, out_id:int, in_id:int, properties:dict):
+        query = f"""
+            MATCH (n)-[r:{edge_label}]->(m)
+            WHERE id(n) = $out_id AND id(m) = $in_id
+            SET r += $properties
+            RETURN id(r) AS edge_id, type(r) AS edge_label, id(n) AS out_node_id, id(m) AS in_node_id, properties(r) AS properties
+        """
+        result = tx.run(query, out_id=out_id, in_id=in_id, properties=properties).data()
+        return result
+
+    def update_edge_properties(self, edge_label:str, out_id:int, in_id:int, properties:dict):
+        """Function for updating edge properties"""
+        with self.driver.session() as session:
+            result = session.write_transaction(self._update_edge_properties_tx, edge_label, out_id, in_id, properties)
+            return result
+
+
 
     # Delete edge
     @staticmethod
