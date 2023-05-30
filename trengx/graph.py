@@ -20,35 +20,61 @@ class Graph:
             return [record.data() for record in result]
 
     # Add node
-    @staticmethod
-    def _add_node_tx(tx, node_label:str, name:str, properties:dict, merge:bool):
-        if merge:
-            if not properties:
-                query = "MERGE (n:" + node_label + "{ name: $name })" \
-                        " RETURN n"
-            else:
-                query = "MERGE (n:" + node_label + "{ name: $name })" \
-                        " SET n += $properties" \
-                        " RETURN n"
-        else:
-            if not properties:
-                query = "CREATE (n:" + node_label + "{ name: $name })" \
-                        " RETURN n"
-            else:
-                query = "CREATE (n:" + node_label + "{ name: $name })" \
-                        " SET n += $properties" \
-                        " RETURN n"
-        result = tx.run(query, name=name, properties=properties).single()
-        node = result['n']
-        node_properties = dict(node.items())
-        return {'id': node.id, 'label': node.labels, 'properties': node_properties}
+    def _add_node_tx(self, tx, node_label:str, properties:dict, merge:bool):
+        """Helper function to add or merge a node in a Neo4j graph database.
 
-    def add_node(self, node_label:str, name:str, properties:dict, merge=False):
-        """Function for creating or merging node
-        Node name (property) should be given)"""
+        This function is meant to be called within a transaction.
+
+        Args:
+            tx: The transaction within which this function is called.
+            node_label (str): The label to assign to the node.
+            properties (dict): Additional properties to assign to the node. 
+                               Assumes there is a 'name' key in properties.
+            merge (bool): If True, the function will attempt to merge the new node with an existing one.
+                          If False, the function will create a new node.
+
+        Returns:
+            dict: A dictionary containing the ID, label, and properties of the newly created or merged node.
+        """
+        try:
+            operation = "MERGE" if merge else "CREATE"
+            query = f"{operation} (n:{node_label} {{name: $name}}) SET n += $properties RETURN n"
+            result = tx.run(query, properties).single()
+            node = result['n']
+            node_properties = dict(node.items())
+            return {'node_id': node.id, 'node_label': node.labels, 'properties': node_properties}
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return None
+
+    def add_node(self, node_label:str, properties:dict = None, merge=False):
+        """Function to add or merge a node in a Neo4j graph database.
+
+        This function creates a new session and transaction with the graph database,
+        and calls the helper function `_add_node_tx` to add or merge the node.
+
+        Args:
+            node_label (str): The label to assign to the node.
+            properties (dict, optional): Additional properties to assign to the node.
+            merge (bool, optional): If True, the function will attempt to merge the new node with an existing one.
+                                    If False (default), the function will create a new node.
+
+        Returns:
+            dict: A dictionary containing the ID, label, and properties of the newly created or merged node.
+        """
+        if properties is None:
+            properties = {}
+
+        if 'name' not in properties:
+            raise ValueError("A 'name' key must be included in the properties dict.")
+
         with self.driver.session() as session:
-            node = session.write_transaction(self._add_node_tx, node_label, name, properties, merge)
-            return node
+            try:
+                node = session.write_transaction(self._add_node_tx, node_label, properties, merge)
+                return node
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                return None
 
     # Delete node
     @staticmethod
