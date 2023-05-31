@@ -18,6 +18,7 @@ class Graph:
         with self.driver.session() as session:
             result = session.run(query, parameters)
             return [record.data() for record in result]
+    
     # Create node
     @staticmethod
     def _create_node_tx(tx, node_label: str, properties: dict):
@@ -60,6 +61,99 @@ class Graph:
 
             except Exception as e:
                 raise Exception(f"Failed to add node: {e}")
+            
+    # Get node by id
+    @staticmethod
+    def _get_node_by_id_tx(tx, node_id: str):
+        try:
+            query = "MATCH (n) WHERE ID(n) = $node_id RETURN n"
+            result = tx.run(query, node_id=node_id).single()
+            node = result['n']
+            if node:
+                node_properties = dict(node.items())
+                return {'id': node.id, 'label': node.labels, 'properties': node_properties}
+            else:
+                return None
+        except Exception as e:
+            raise Exception(f"Failed to retrieve node: {e}")
+
+    def get_node_by_id(self, node_id: str):
+        """
+        Method to retrieve a node from the graph database based on its ID.
+
+        Args:
+            node_id (str): The ID of the node to retrieve.
+
+        Returns:
+            dict: A dictionary representing the retrieved node.
+        """
+        with self.driver.session() as session:
+            try:
+                return session.read_transaction(self._get_node_by_id_tx, node_id)
+
+            except Exception as e:
+                raise Exception(f"Failed to retrieve node: {e}")
+
+
+    @staticmethod
+    def _update_node_properties_tx(tx, node_id: str, properties: dict):
+        try:
+            query = "MATCH (n) WHERE id(n) = $node_id SET n += $properties RETURN n"
+            result = tx.run(query, node_id=node_id, properties=properties)
+            node = result.single()
+            if node:
+                node_properties = dict(node['n'].items())
+                return {'id': node['n'].id, 'label': node['n'].labels, 'properties': node_properties}
+            else:
+                return None
+
+        except Exception as e:
+            raise Exception(f"Failed to update node properties: {e}")
+
+    @staticmethod
+    def update_node_properties(driver, node_id: str, properties: dict):
+        """
+        Static method to update the properties of a node in the graph database.
+
+        Args:
+            driver: The Neo4j driver object.
+            node_id (str): The ID of the node to update.
+            properties (dict): The updated properties to assign to the node.
+
+        Returns:
+            dict: A dictionary representing the updated node.
+        """
+        with driver.session() as session:
+            try:
+                return session.write_transaction(GraphDB._update_node_properties_tx, node_id, properties)
+
+            except Exception as e:
+                raise Exception(f"Failed to update node properties: {e}")
+
+    @staticmethod
+    def _delete_node_tx(tx, node_id: str):
+        try:
+            query = "MATCH (n) WHERE id(n) = $node_id DELETE n"
+            tx.run(query, node_id=node_id)
+
+        except Exception as e:
+            raise Exception(f"Failed to delete node: {e}")
+
+    @staticmethod
+    def delete_node(driver, node_id: str):
+        """
+        Static method to delete a node from the graph database based on its ID.
+
+        Args:
+            driver: The Neo4j driver object.
+            node_id (str): The ID of the node to delete.
+        """
+        with driver.session() as session:
+            try:
+                session.write_transaction(GraphDB._delete_node_tx, node_id)
+
+            except Exception as e:
+                raise Exception(f"Failed to delete node: {e}")
 
 
 
