@@ -18,9 +18,9 @@ class Graph:
         with self.driver.session() as session:
             result = session.run(query, parameters)
             return [record.data() for record in result]
-    # Add node
+    # Create node
     @staticmethod
-    def _add_node_tx(tx, node_label: str, properties: dict):
+    def _create_node_tx(tx, node_label: str, properties: dict):
         if not isinstance(node_label, str):
             raise TypeError(f"Expected str for node_label, got {type(node_label)}")
         if not isinstance(properties, dict):
@@ -30,12 +30,13 @@ class Graph:
             query = f"CREATE (n:{node_label} $properties) RETURN n"
             result = tx.run(query, properties=properties).single()
             node = result['n']
-            return dict(node)
+            node_properties = dict(node.items())
+            return {'id': node.id, 'label': node.labels, 'properties': node_properties}
 
         except Exception as e:
             raise Exception(f"Failed to add node: {e}")
 
-    def add_node(self, node_label: str, properties: dict = None):
+    def create_node(self, node_label: str, properties: dict = None):
         """
         Function to add a node in a Neo4j graph database.
 
@@ -54,7 +55,7 @@ class Graph:
 
         with self.driver.session() as session:
             try:
-                node = session.write_transaction(self._add_node_tx, node_label, properties)
+                node = session.write_transaction(self._create_node_tx, node_label, properties)
                 return node
 
             except Exception as e:
