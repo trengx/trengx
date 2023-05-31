@@ -1,48 +1,104 @@
-# Graph class
-"""Module providing basic graph queries (Neo4j Cypher)"""
+# Ops class
+import uuid
+from typing import Optional, List, Dict, Union
+from neo4j import GraphDatabase as graphdb
+
 class Graph:
-    """Class for providing basic graph queries (Neo4j Cypher)"""
-    # Initialize graph database class
-    def __init__(self, graphdb, uri, user, password):
-        self.driver = graphdb.driver(uri, auth=(user, password))
+    """
+    This class acts as an interface for executing and managing basic graph operations
+    on a Neo4j graph database.
 
-    # Close session
-    def close(self)-> None:
-        """Function for session closing"""
-        self.driver.close()
+    Attributes:
+        driver : A driver object that maintains the connection to the database.
+    """
+    def __init__(self, uri: str, user: str, password: str):
+        """
+        Initializes the Graph object with a connection to the database.
 
-    # Run any Cypher query
-    def run_query(self, query, parameters=None):
-        """Function for running arbitrary Cypher query
-        Query parameters should be given as a dictionary"""
-        with self.driver.session() as session:
-            result = session.run(query, parameters)
-            return [record.data() for record in result]
-    
-    # Create node
-    @staticmethod
-    def _create_node_tx(tx, node_label: str, properties: dict):
-        if not isinstance(node_label, str):
-            raise TypeError(f"Expected str for node_label, got {type(node_label)}")
-        if not isinstance(properties, dict):
-            raise TypeError(f"Expected dict for properties, got {type(properties)}")
+        Args:
+            uri (str): The connection string for the database.
+            user (str): The username for the database.
+            password (str): The password for the database.
+        """
+        try:
+            self.driver = graphdb.driver(uri, auth=(user, password))
+        except Exception as e:
+            raise Exception(f"Failed to create driver: {e}")
+
+    def close(self) -> None:
+        """
+        Closes the connection to the database.
+        """
+        try:
+            self.driver.close()
+        except Exception as e:
+            raise Exception(f"Failed to close driver: {e}")
+
+    def run_query(self, query: str, parameters: Optional[Dict[str, Union[str, int]]] = None) -> List[Dict[str, Union[str, int]]]:
+        """
+        Runs an arbitrary Cypher query on the database.
+
+        Args:
+            query (str): The Cypher query to run.
+            parameters (dict, optional): The parameters for the query. Keys are parameter names,
+                and values are parameter values.
+
+        Returns:
+            list[dict]: A list of dictionaries representing the records returned by the query.
+        """
+        if parameters is not None and not isinstance(parameters, dict):
+            raise TypeError(f"Expected dict for parameters, got {type(parameters)}")
 
         try:
+            with self.driver.session() as session:
+                result = session.run(query, parameters)
+                return [record.data() for record in result]
+        except Exception as e:
+            raise Exception(f"Failed to run query: {e}")
+
+    def __del__(self):
+        """
+        Destructor method to ensure the connection gets closed when the object is deleted.
+        """
+        self.close()
+
+    # Create node   
+    @staticmethod
+    def _create_node_tx(tx, node_label: str, properties: dict):
+        """
+        Private helper function to create a node within a transaction.
+
+        Args:
+            tx: Transaction object.
+            node_label (str): The label to assign to the node.
+            properties (dict): Additional properties to assign to the node.
+
+        Returns:
+            dict: A dictionary representing the newly created node.
+        """
+
+        if not isinstance(node_label, str):
+            raise TypeError("node_label must be a string")
+        if not isinstance(properties, dict):
+            raise TypeError("properties must be a dictionary")
+    
+        try:
+            properties['uuid'] = str(uuid.uuid4())
             query = f"CREATE (n:{node_label} $properties) RETURN n"
             result = tx.run(query, properties=properties).single()
             node = result['n']
             node_properties = dict(node.items())
-            return {'id': node.id, 'label': node.labels, 'properties': node_properties}
-
+            del node_properties['uuid']
+            return {'id': node['uuid'], 'label': list(node.labels), 'properties': node_properties}
         except Exception as e:
             raise Exception(f"Failed to add node: {e}")
 
     def create_node(self, node_label: str, properties: dict = None):
         """
-        Function to add a node in a Neo4j graph database.
+        Public function to add a node in a Neo4j graph database.
 
         This function creates a new session and transaction with the graph database,
-        and calls the helper function `_add_node_tx` to add the node.
+        and calls the helper function `_create_node_tx` to add the node.
 
         Args:
             node_label (str): The label to assign to the node.
@@ -58,45 +114,74 @@ class Graph:
             try:
                 node = session.write_transaction(self._create_node_tx, node_label, properties)
                 return node
-
             except Exception as e:
                 raise Exception(f"Failed to add node: {e}")
             
     # Get node by id
     @staticmethod
-    def _get_node_by_id_tx(tx, node_id: str):
+    def _get_node_by_id_tx(tx, uuid: str):
+        """
+        Private helper function to retrieve a node within a transaction.
+
+        Args:
+            tx: Transaction object.
+            uuid (str): The UUID of the node to retrieve.
+
+        Returns:
+            dict: A dictionary representing the retrieved node, or None if no node is found.
+        """
+
+        if not isinstance(uuid, str):
+            raise TypeError("UUID must be a string")
+    
         try:
-            query = "MATCH (n) WHERE ID(n) = $node_id RETURN n"
-            result = tx.run(query, node_id=node_id).single()
-            node = result['n']
-            if node:
-                node_properties = dict(node.items())
-                return {'id': node.id, 'label': node.labels, 'properties': node_properties}
+            query = "MATCH (n) WHERE n.uuid = $uuid RETURN n"
+            result = tx.run(query, uuid=uuid).single()
+            if result is None:
+                return f"No node found with UUID: {uuid}"
             else:
-                return None
+                node = result['n']
+                if node:
+                    node_properties = dict(node.items())
+                    del node_properties['uuid']
+                    return {'id': node['uuid'], 'label': list(node.labels), 'properties': node_properties}
         except Exception as e:
             raise Exception(f"Failed to retrieve node: {e}")
 
-    def get_node_by_id(self, node_id: str):
+    def get_node_by_id(self, uuid: str):
         """
-        Method to retrieve a node from the graph database based on its ID.
+        Public function to retrieve a node from the graph database based on its UUID.
+
+        This function creates a new session and transaction with the graph database,
+        and calls the helper function `_get_node_by_id_tx` to retrieve the node.
 
         Args:
-            node_id (str): The ID of the node to retrieve.
+            uuid (str): The UUID of the node to retrieve.
 
         Returns:
-            dict: A dictionary representing the retrieved node.
+            dict: A dictionary representing the retrieved node, or None if no node is found.
         """
         with self.driver.session() as session:
             try:
-                return session.read_transaction(self._get_node_by_id_tx, node_id)
-
+                return session.read_transaction(self._get_node_by_id_tx, uuid)
             except Exception as e:
                 raise Exception(f"Failed to retrieve node: {e}")
 
 
+    # Update node properties
     @staticmethod
     def _update_node_properties_tx(tx, node_id: str, properties: dict):
+        """
+        Private helper function to update node properties within a transaction.
+
+        Args:
+            tx: Transaction object.
+            node_id (str): The ID of the node to update.
+            properties (dict): The updated properties to assign to the node.
+
+        Returns:
+            dict: A dictionary representing the updated node, or None if no node is found.
+        """
         try:
             query = "MATCH (n) WHERE id(n) = $node_id SET n += $properties RETURN n"
             result = tx.run(query, node_id=node_id, properties=properties)
@@ -104,77 +189,72 @@ class Graph:
             if node:
                 node_properties = dict(node['n'].items())
                 return {'id': node['n'].id, 'label': node['n'].labels, 'properties': node_properties}
-            else:
-                return None
-
+            return None
         except Exception as e:
             raise Exception(f"Failed to update node properties: {e}")
 
-    @staticmethod
-    def update_node_properties(driver, node_id: str, properties: dict):
+    def update_node_properties(self, node_id: str, properties: dict):
         """
-        Static method to update the properties of a node in the graph database.
+        Public function to update the properties of a node in the graph database.
+
+        This function creates a new session and transaction with the graph database,
+        and calls the helper function `_update_node_properties_tx` to update the node.
 
         Args:
-            driver: The Neo4j driver object.
             node_id (str): The ID of the node to update.
             properties (dict): The updated properties to assign to the node.
 
         Returns:
-            dict: A dictionary representing the updated node.
+            dict: A dictionary representing the updated node, or None if no node is found.
         """
-        with driver.session() as session:
+        with self.driver.session() as session:
             try:
-                return session.write_transaction(GraphDB._update_node_properties_tx, node_id, properties)
-
+                return session.write_transaction(self._update_node_properties_tx, node_id, properties)
             except Exception as e:
                 raise Exception(f"Failed to update node properties: {e}")
 
+    # Delete node
     @staticmethod
     def _delete_node_tx(tx, node_id: str):
-        try:
-            query = "MATCH (n) WHERE id(n) = $node_id DELETE n"
-            tx.run(query, node_id=node_id)
+        """
+        Private helper function to delete a node within a transaction.
 
+        Args:
+            tx: Transaction object.
+            node_id (str): The ID of the node to delete.
+
+        Returns:
+            bool: True if the node was deleted, False otherwise.
+        """
+        try:
+            query = "MATCH (n) WHERE id(n) = $node_id DELETE n RETURN count(n) as deleted_count"
+            result = tx.run(query, node_id=node_id).single()
+            deleted_count = result["deleted_count"]
+            if deleted_count == 0:
+                return False
+            return True
         except Exception as e:
             raise Exception(f"Failed to delete node: {e}")
 
-    @staticmethod
-    def delete_node(driver, node_id: str):
+    def delete_node(self, node_id: str):
         """
-        Static method to delete a node from the graph database based on its ID.
+        Public function to delete a node from the graph database based on its ID.
+
+        This function creates a new session and transaction with the graph database,
+        and calls the helper function `_delete_node_tx` to delete the node.
 
         Args:
-            driver: The Neo4j driver object.
             node_id (str): The ID of the node to delete.
-        """
-        with driver.session() as session:
-            try:
-                session.write_transaction(GraphDB._delete_node_tx, node_id)
 
+        Returns:
+            bool: True if the node was deleted, False otherwise.
+        """
+        with self.driver.session() as session:
+            try:
+                return session.write_transaction(self._delete_node_tx, node_id)
             except Exception as e:
                 raise Exception(f"Failed to delete node: {e}")
 
-
-
-    # Delete node
-    @staticmethod
-    def _delete_node_tx(tx, node_id:int):
-        query = "MATCH (n) WHERE id(n) = $node_id" \
-                " DELETE n" \
-                " RETURN id(n) AS deleted_node_id"
-        result = tx.run(query, node_id=node_id).single()
-        if result is None:
-            return None
-        return {'deleted_node_id': result['deleted_node_id']}
-
-    def delete_node(self, node_id:int):
-        """Function for deleting node using node id"""
-        with self.driver.session() as session:
-            result = session.write_transaction(self._delete_node_tx, node_id)
-            if result is None:
-                return None
-            return result
 
     @staticmethod
     def _set_node_value_tx(tx, node_id:int, value):
