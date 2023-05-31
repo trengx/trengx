@@ -18,8 +18,6 @@ class Graph:
         with self.driver.session() as session:
             result = session.run(query, parameters)
             return [record.data() for record in result]
-
-
     # Add node
     @staticmethod
     def _add_node_tx(tx, node_label: str, properties: dict):
@@ -29,14 +27,11 @@ class Graph:
             raise TypeError(f"Expected dict for properties, got {type(properties)}")
 
         try:
-            query = f"CREATE (n:{node_label} {{"
-            query += ', '.join(f'{key}: ${key}' for key in properties.keys())
-            query += "}) RETURN n"
-
-            result = tx.run(query, **properties).single()
+            query = f"CREATE (n:{node_label} $properties) RETURN n"
+            result = tx.run(query, properties=properties).single()
             node = result['n']
-            node_properties = dict(node.items())
-            return {'id': node.id, 'label': node.labels, 'properties': node_properties}
+            return dict(node)
+
         except Exception as e:
             raise Exception(f"Failed to add node: {e}")
 
@@ -52,7 +47,7 @@ class Graph:
             properties (dict, optional): Additional properties to assign to the node.
 
         Returns:
-            dict: A dictionary containing the ID, label, and properties of the newly created node.
+            dict: A dictionary representing the newly created node.
         """
         if properties is None:
             properties = {}
@@ -61,6 +56,7 @@ class Graph:
             try:
                 node = session.write_transaction(self._add_node_tx, node_label, properties)
                 return node
+
             except Exception as e:
                 raise Exception(f"Failed to add node: {e}")
 
