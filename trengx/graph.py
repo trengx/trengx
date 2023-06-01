@@ -1,4 +1,4 @@
-# Ops class
+# Graph class
 import uuid
 from typing import Optional, List, Dict, Union
 from neo4j import GraphDatabase as graphdb
@@ -111,7 +111,7 @@ class Graph:
             
     # Get node by id
     @staticmethod
-    def _get_node_by_id_tx(tx, node_id: str):
+    def _get_node_tx(tx, node_id: str):
         """
         Private helper function to retrieve a node within a transaction.
 
@@ -134,15 +134,15 @@ class Graph:
                 del node_properties['uuid']
                 return {'id': node['uuid'], 'label': list(node.labels), 'properties': node_properties}
 
-    def get_node_by_id(self, node_id: str):
+    def get_node (self, node_id: str):
         """
         Public function to retrieve a node from the graph database based on its UUID.
 
         This function creates a new session and transaction with the graph database,
-        and calls the helper function `_get_node_by_id_tx` to retrieve the node.
+        and calls the helper function `_get_node_tx` to retrieve the node.
 
         Args:
-            uuid (str): The UUID of the node to retrieve.
+            node_id (str): The ID of the node (UUID) to retrieve.
 
         Returns:
             dict: A dictionary representing the retrieved node, or None if no node is found.
@@ -151,7 +151,7 @@ class Graph:
             raise TypeError("node_id must be a string")
         with self.driver.session() as session:
             try:
-                return session.read_transaction(self._get_node_by_id_tx, node_id)
+                return session.read_transaction(self._get_node_tx, node_id)
             except Exception as e:
                 raise Exception(f"Failed to retrieve node: {e}")
 
@@ -199,7 +199,7 @@ class Graph:
             dict: A dictionary representing the updated node, or None if no node is found.
         """
         if not isinstance(node_id, str):
-            raise TypeError("node_label must be a string")
+            raise TypeError("node_id must be a string")
         if not isinstance(properties, dict):
             raise TypeError("properties must be a dictionary")
         with self.driver.session() as session:
@@ -210,28 +210,39 @@ class Graph:
 
     # Delete node
     @staticmethod
-    def _delete_node_tx(tx, node_id: str):
+    def _delete_node_tx(tx, node_id: str, detach: bool = False):
         """
         Private helper function to delete a node within a transaction.
 
         Args:
             tx: Transaction object.
             node_id (str): The ID of the node to delete.
+            detach (bool, optional): Flag indicating whether to delete the node with or without detaching relationships.
 
         Returns:
             bool: True if the node was deleted, False otherwise.
         """
         try:
-            query = "MATCH (n) WHERE n.uuid = $node_id DELETE n RETURN count(n) as deleted_count"
+            query = "MATCH (n) WHERE n.uuid = $node_id"
+            
+            if detach:
+                query += " DETACH DELETE n"
+            else:
+                query += " DELETE n"
+            
+            query += " RETURN count(n) as deleted_count"
+            
             result = tx.run(query, node_id=node_id).single()
             deleted_count = result["deleted_count"]
+            
             if deleted_count == 0:
                 return False
             return True
         except Exception as e:
             raise Exception(f"Failed to delete node: {e}")
 
-    def delete_node(self, node_id: str):
+
+    def delete_node(self, node_id: str, detach: bool = False):
         """
         Public function to delete a node from the graph database based on its ID.
 
@@ -240,15 +251,22 @@ class Graph:
 
         Args:
             node_id (str): The ID of the node to delete.
+            detach (bool, optional): Flag indicating whether to delete the node with or without detaching relationships.
 
         Returns:
             bool: True if the node was deleted, False otherwise.
         """
+        if not isinstance(node_id, str):
+            raise TypeError("node_id must be a string")
+        if not isinstance(detach, bool):
+            raise TypeError("detach must be a boolean")
+
         with self.driver.session() as session:
             try:
-                return session.write_transaction(self._delete_node_tx, node_id)
+                return session.write_transaction(self._delete_node_tx, node_id, detach)
             except Exception as e:
                 raise Exception(f"Failed to delete node: {e}")
+
 
 
     #Set node value
@@ -283,7 +301,7 @@ class Graph:
         try:
             query = """
                 MATCH (in1)
-                WHERE id(in1) = $node_id
+                WHERE in1.uuid = $node_id
                 SET in1.value = $value
                 WITH in1
                 MATCH path = (in1)-[r:num2op|op2num*0..]->()
@@ -296,7 +314,7 @@ class Graph:
                 WITH nodes[i] AS in1, nodes[i+1] AS op, nodes[i+2] AS out
                 MATCH (in1)-[:num2op]->(op)-[:op2num]->(out)
                 OPTIONAL MATCH (in2)-[:num2op]->(op)
-                WHERE id(in2) <> id(in1)  
+                WHERE in1.uuid  <> in2.uuid   
                 WITH in1, op, out, in2
                 SET out.value = 
                 CASE 
@@ -330,116 +348,350 @@ class Graph:
             return False
 
     def set_node_value(self, node_id:str, value):
-        try:
-            with self.driver.session() as session:
-                success = session.execute_write(self._set_node_value_tx, node_id, value)
-            return success
-        except Exception as e:
-            print(f"Error occurred: {e}")
-            return False
-
-
+        if not isinstance(node_id, str):
+            raise TypeError("node_id must be a string")
+        with self.driver.session() as session:
+            return session.execute_write(self._set_node_value_tx, node_id, value)
+        
     @staticmethod
-    def _get_node_prop_tx(tx, node_id:int, key:str):
+    def _get_node_value_tx(tx, node_id: str):
+        """
+        Private helper function to retrieve the 'value' property of a node within a transaction.
+
+        Args:
+            tx: Transaction object.
+            node_id (str): The ID of the node.
+
+        Returns:
+            Any: The value of the 'value' property, or None if the property does not exist.
+        """
+        key = 'value'  # The key we're interested in is 'value'
         query = """
             MATCH (n) 
-            WHERE id(n) = $node_id
+            WHERE n.uuid = $node_id
             RETURN apoc.map.values(n, [$key])[0] as value
         """
         result = tx.run(query, node_id=node_id, key=key)
         record = result.single()
         return record['value']
 
-    def get_node_prop(self, node_id:str, key:str):
-        """Function for getting node property value using node ID"""
-        with self.driver.session() as session:
-            result = session.execute_read(self._get_node_prop_tx, node_id, key)
-            return result
+    def get_node_value(self, node_id: str):
+        """
+        Public function to retrieve the 'value' property of a node from the graph database.
 
-    
-    # Remove node property
+        This function creates a new session and transaction with the graph database,
+        and calls the helper function `_get_node_value_tx` to retrieve the 'value' property.
+
+        Args:
+            node_id (str): The ID of the node.
+
+        Returns:
+            Any: The value of the 'value' property, or None if the property does not exist.
+        """
+        if not isinstance(node_id, str):
+            raise TypeError("node_id must be a string")
+        with self.driver.session() as session:
+            try:
+                return session.read_transaction(self._get_node_value_tx, node_id)
+            except Exception as e:
+                raise Exception(f"Failed to retrieve node 'value' property: {e}")
+
+
     @staticmethod
-    def _remove_node_prop_tx(tx, id_key, id_value, key ):
-        query = "MATCH (n) WHERE n." + id_key + " = $id_value" \
-                " REMOVE n." + key
-        result = tx.run(query, id_value = id_value)
-        return result
+    def _get_node_property_tx(tx, node_id: str, key: str):
+        """
+        Private helper function to retrieve a specific property of a node within a transaction.
 
-    def remove_node_prop(self, id_key, id_value, key):
-        """Function for removing node property value"""
+        Args:
+            tx: Transaction object.
+            node_id (str): The ID of the node.
+            key (str): The property key.
+
+        Returns:
+            Any: The value of the specified property, or None if the property does not exist.
+        """
+        query = """
+            MATCH (n) 
+            WHERE n.uuid = $node_id
+            RETURN apoc.map.values(n, [$key])[0] as value
+        """
+        result = tx.run(query, node_id=node_id, key=key)
+        record = result.single()
+        return record['value']
+
+    def get_node_property(self, node_id: str, key: str):
+        """
+        Public function to retrieve a specific property of a node from the graph database.
+
+        This function creates a new session and transaction with the graph database,
+        and calls the helper function `_get_node_property_tx` to retrieve the property.
+
+        Args:
+            node_id (str): The ID of the node.
+            key (str): The property key.
+
+        Returns:
+            Any: The value of the specified property, or None if the property does not exist.
+        """
+        if not isinstance(node_id, str):
+            raise TypeError("node_id must be a string")
+        if not isinstance(key, str):
+            raise TypeError("key must be a string")
         with self.driver.session() as session:
-            result = session.execute_write(self._remove_node_prop_tx, id_key, id_value, key)
-            return result
+            try:
+                return session.read_transaction(self._get_node_property_tx, node_id, key)
+            except Exception as e:
+                raise Exception(f"Failed to retrieve node property: {e}")
 
     # Add edge
     @staticmethod
-    def _add_edge_tx(tx, edge_label:str, out_id:int, in_id:int, properties:dict, merge:bool):
+    def _add_edge_tx(tx, label:str, out_id:str, in_id:str, properties:dict=None, merge:bool=False):
+        """
+        Private helper function to add an edge between two nodes within a transaction.
+
+        Args:
+            tx: Transaction object.
+            label (str): The label of the edge.
+            out_id (str): The ID of the outgoing node.
+            in_id (str): The ID of the incoming node.
+            properties (dict, optional): The properties of the edge.
+            merge (bool, optional): A flag indicating whether to merge the edge if it already exists.
+
+        Returns:
+            list: A list containing dictionaries with details of the created or merged edge.
+        """
         if merge:
             add_clause = "MERGE"
         else:
             add_clause = "CREATE"
-
-        query = "MATCH (n) WHERE id(n) = $out_id" \
-                " MATCH (m) WHERE id(m) = $in_id" \
-                " " + add_clause + " (n)-[r:" + edge_label + "]->(m)"
+        
+        edge_id = str(uuid.uuid4())
+        
+        query = f"MATCH (n) WHERE n.uuid = $out_id MATCH (m) WHERE m.uuid = $in_id {add_clause} (n)-[r:{label}{{uuid: $edge_id}}]->(m)"
         if properties:
             query += " SET r += $properties"
-        query += " RETURN id(r) AS edge_id, type(r) AS edge_label, id(n) AS out_node_id, id(m) AS in_node_id, properties(r) AS properties"
-        result = tx.run(query, out_id=out_id, in_id=in_id, properties=properties).data()
-        return result
+        query += " RETURN r.uuid AS id, type(r) AS label, n.uuid AS out_id, m.uuid AS in_id, properties(r) AS properties"
+        
+        try:
+            result = tx.run(query, out_id=out_id, in_id=in_id, edge_id=edge_id, properties=properties).data()
+            edge = result[0]
+            # Remove the 'edge_id' key from properties
+            edge['properties'].pop('uuid', None)
+        except Exception as e:
+            raise Exception(f"Failed to add edge: {e}")
+        
+        return edge
 
-    def add_edge(self, edge_label:str, out_id:int, in_id:int, properties:dict=None, merge=False):
-        """Function for adding edge"""
+    def add_edge(self, label:str, out_id:str, in_id:str, properties:dict=None, merge:bool=False):
+        """
+        Public function to add an edge between two nodes in the graph database.
+
+        This function creates a new session and transaction with the graph database,
+        and calls the helper function `_add_edge_tx` to add the edge.
+
+        Args:
+            label (str): The label of the edge.
+            out_id (str): The ID of the outgoing node.
+            in_id (str): The ID of the incoming node.
+            properties (dict, optional): The properties of the edge.
+            merge (bool, optional): A flag indicating whether to merge the edge if it already exists.
+
+        Returns:
+            list: A list containing dictionaries with details of the created or merged edge.
+        """
+        if not isinstance(label, str):
+            raise TypeError("edge_label must be a string")
+        if not isinstance(out_id, str):
+            raise TypeError("out_id must be a string")
+        if not isinstance(in_id, str):
+            raise TypeError("in_id must be a string")
+        if properties and not isinstance(properties, dict):
+            raise TypeError("properties must be a dictionary")
+        if not isinstance(merge, bool):
+            raise TypeError("merge must be a boolean")
+        
         with self.driver.session() as session:
-            result = session.write_transaction(self._add_edge_tx, edge_label, out_id, in_id, properties, merge)
-            return result
+            try:
+                edge = session.write_transaction(self._add_edge_tx, label, out_id, in_id, properties, merge)
+                return edge
+            except Exception as e:
+                raise Exception(f"Failed to add edge: {e}")
+
+    # Get edge
+    @staticmethod
+    def _get_edge_tx(tx, id: str):
+        """
+        Private helper function to retrieve an edge by its ID within a transaction.
+
+        Args:
+            tx: Transaction object.
+            id (str): The ID of the edge to retrieve.
+
+        Returns:
+            dict: A dictionary representing the retrieved edge.
+        """
+        try:
+            query = "MATCH ()-[r]-() WHERE r.uuid = $id RETURN r.uuid AS id, type(r) AS label, startNode(r).uuid AS out_id, endNode(r).uuid AS in_id, properties(r) AS properties"
+            result = tx.run(query, id=id).data()
+            edge = result[0]
+            # Remove the 'edge_id' key from properties
+            edge['properties'].pop('uuid', None)
+        except Exception as e:
+            raise Exception(f"Failed to retrieve edge: {e}")
+        
+        return edge
+
+
+    def get_edge(self, id: str):
+        """
+        Public function to retrieve an edge by its ID.
+
+        This function creates a new session and transaction with the graph database,
+        and calls the helper function `_get_edge_tx` to retrieve the edge.
+
+        Args:
+            id (str): The ID of the edge to retrieve.
+
+        Returns:
+            dict: A dictionary representing the retrieved edge, or None if no edge is found.
+        """
+        if not isinstance(id, str):
+            raise TypeError("id must be a string")
+
+        with self.driver.session() as session:
+            try:
+                return session.read_transaction(self._get_edge_tx, id)
+            except Exception as e:
+                raise Exception(f"Failed to retrieve edge: {e}")
+
 
     # Update edge properties
     @staticmethod
-    def _update_edge_properties_tx(tx, edge_label:str, out_id:int, in_id:int, properties:dict):
-        query = f"""
-            MATCH (n)-[r:{edge_label}]->(m)
-            WHERE id(n) = $out_id AND id(m) = $in_id
-            SET r += $properties
-            RETURN id(r) AS edge_id, type(r) AS edge_label, id(n) AS out_node_id, id(m) AS in_node_id, properties(r) AS properties
+    def _update_edge_properties_tx(tx, id: str, properties: dict):
         """
-        result = tx.run(query, out_id=out_id, in_id=in_id, properties=properties).data()
-        return result
+        Private helper function to update edge properties by ID within a transaction.
 
-    def update_edge_properties(self, edge_label:str, out_id:int, in_id:int, properties:dict):
-        """Function for updating edge properties"""
-        with self.driver.session() as session:
-            result = session.write_transaction(self._update_edge_properties_tx, edge_label, out_id, in_id, properties)
-            return result
+        Args:
+            tx: Transaction object.
+            id (str): The ID of the edge to update.
+            properties (dict): The new properties for the edge.
 
+        Returns:
+            bool: True if the update operation was successful, False otherwise.
+        """
+        query = """
+            MATCH ()-[r]-()
+            WHERE r.uuid = $id
+            SET r += $properties
+            RETURN r.uuid AS edge_id
+        """
+
+        result = tx.run(query, id=id, properties=properties)
+        return result is not None
+
+
+    def update_edge_properties(self, id: str, properties: dict):
+        """
+        Public function to update edge properties by ID in the graph database.
+
+        Args:
+            id (str): The ID of the edge to update.
+            properties (dict): The new properties for the edge.
+
+        Returns:
+            bool: True if the update operation was successful, False otherwise.
+        """
+        if not isinstance(id, str):
+            raise TypeError("id must be a string")
+
+        if not isinstance(properties, dict):
+            raise TypeError("properties must be a dictionary")
+
+        try:
+            with self.driver.session() as session:
+                return session.write_transaction(self._update_edge_properties_tx, id, properties)
+        except Exception as e:
+            raise Exception(f"Failed to update edge properties: {e}")
 
 
     # Delete edge
     @staticmethod
-    def _delete_edge_tx(tx, edge_label:str, out_id:int, in_id:int):
-        query = "MATCH (n)-[r:" + edge_label + "]->(m)" \
-                " WHERE id(n) = $out_id AND id(m) = $in_id" \
-                " DELETE r" \
-                " RETURN id(r) as deleted_edge_id"
-        result = tx.run(query, out_id=out_id, in_id=in_id).data()
-        return result
+    def _delete_edge_tx(tx, id: str):
+        """
+        Private helper function to delete an edge by its ID within a transaction.
 
-    def delete_edge(self, edge_label:str, out_id:int, in_id:int):
-        """Function for deleting edge"""
+        Args:
+            tx: Transaction object.
+            id (str): The ID of the edge to delete.
+
+        Returns:
+            bool: True if at least one edge was deleted, False otherwise.
+        """
+        try:
+            query = "MATCH ()-[r]-() WHERE r.uuid = $id DELETE r RETURN count(r) as deleted_count"
+            result = tx.run(query, id=id).single()
+            deleted_count = result["deleted_count"]
+
+            return deleted_count > 0
+        except Exception as e:
+            raise Exception(f"Failed to delete edge: {e}")
+
+
+    def delete_edge(self, id: str):
+        """
+        Public function to delete an edge by its ID.
+
+        This function creates a new session and transaction with the graph database,
+        and calls the helper function `_delete_edge_tx` to delete the edge.
+
+        Args:
+            id (str): The ID of the edge to delete.
+
+        Returns:
+            bool: True if at least one edge was deleted, False otherwise.
+        """
+        if not isinstance(id, str):
+            raise TypeError("id must be a string")
+
         with self.driver.session() as session:
-            result = session.execute_write(self._delete_edge_tx, edge_label, out_id, in_id)
-            return result
+            try:
+                return session.write_transaction(self._delete_edge_tx, id)
+            except Exception as e:
+                raise Exception(f"Failed to delete edge: {e}")
+
 
     # Delete all
     @staticmethod
     def _delete_all_tx(tx):
-        query = "MATCH (n)\n" \
-                "OPTIONAL MATCH (n)-[r]-()\n" \
-                "DELETE n, r"
-        tx.run(query)
-    
+        """
+        Private helper function to delete all nodes and relationships within a transaction.
+
+        Args:
+            tx: Transaction object.
+
+        Returns:
+            bool: True if the deletion operation was successful, False otherwise.
+        """
+        query = """
+            MATCH (n)
+            OPTIONAL MATCH (n)-[r]-()
+            DELETE n, r
+            RETURN count(n) as deleted_nodes, count(r) as deleted_edges
+        """
+        result = tx.run(query).single()
+
+        return result is not None
+
     def delete_all(self):
-        """Function for deleting all nodes and relationships"""
-        with self.driver.session() as session:
-            session.write_transaction(self._delete_all_tx)
-        return {'status': 'deleted all'}
+        """
+        Public function to delete all nodes and relationships in the graph database.
+
+        Returns:
+            bool: True if the deletion operation was successful, False otherwise.
+        """
+        try:
+            with self.driver.session() as session:
+                return session.write_transaction(self._delete_all_tx)
+        except Exception as e:
+            raise Exception(f"Failed to delete all nodes and relationships: {e}")
+
