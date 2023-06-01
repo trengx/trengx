@@ -76,20 +76,13 @@ class Graph:
         Returns:
             dict: A dictionary representing the newly created node.
         """
-        if not isinstance(node_label, str):
-            raise TypeError("node_label must be a string")
-        if not isinstance(properties, dict):
-            raise TypeError("properties must be a dictionary")
-        try:
-            properties['uuid'] = str(uuid.uuid4())
-            query = f"CREATE (n:{node_label} $properties) RETURN n"
-            result = tx.run(query, properties=properties).single()
-            node = result['n']
-            node_properties = dict(node.items())
-            del node_properties['uuid']
-            return {'id': node['uuid'], 'label': list(node.labels), 'properties': node_properties}
-        except Exception as e:
-            raise Exception(f"Failed to add node: {e}")
+        properties['uuid'] = str(uuid.uuid4())
+        query = f"CREATE (n:{node_label} $properties) RETURN n"
+        result = tx.run(query, properties=properties).single()
+        node = result['n']
+        node_properties = dict(node.items())
+        del node_properties['uuid']
+        return {'id': node['uuid'], 'label': list(node.labels), 'properties': node_properties}
 
     def add_node(self, node_label: str, properties: dict = None):
         """
@@ -105,9 +98,10 @@ class Graph:
         Returns:
             dict: A dictionary representing the newly created node.
         """
-        if properties is None:
-            properties = {}
-
+        if not isinstance(node_label, str):
+            raise TypeError("node_label must be a string")
+        if not isinstance(properties, dict):
+            raise TypeError("properties must be a dictionary")
         with self.driver.session() as session:
             try:
                 node = session.write_transaction(self._add_node_tx, node_label, properties)
@@ -128,23 +122,17 @@ class Graph:
         Returns:
             dict: A dictionary representing the retrieved node.
         """
-
-        if not isinstance(node_id, str):
-            raise TypeError("node_id must be a string")
     
-        try:
-            query = "MATCH (n) WHERE n.uuid = $node_id RETURN n"
-            result = tx.run(query, node_id=node_id).single()
-            if result is None:
-                return f"No node found with node_id: {node_id}"
-            else:
-                node = result['n']
-                if node:
-                    node_properties = dict(node.items())
-                    del node_properties['uuid']
-                    return {'id': node['uuid'], 'label': list(node.labels), 'properties': node_properties}
-        except Exception as e:
-            raise Exception(f"Failed to retrieve node: {e}")
+        query = "MATCH (n) WHERE n.uuid = $node_id RETURN n"
+        result = tx.run(query, node_id=node_id).single()
+        if result is None:
+            return f"No node found with node_id: {node_id}"
+        else:
+            node = result['n']
+            if node:
+                node_properties = dict(node.items())
+                del node_properties['uuid']
+                return {'id': node['uuid'], 'label': list(node.labels), 'properties': node_properties}
 
     def get_node_by_id(self, node_id: str):
         """
@@ -158,7 +146,9 @@ class Graph:
 
         Returns:
             dict: A dictionary representing the retrieved node, or None if no node is found.
-        """
+        """        
+        if not isinstance(node_id, str):
+            raise TypeError("node_id must be a string")
         with self.driver.session() as session:
             try:
                 return session.read_transaction(self._get_node_by_id_tx, node_id)
@@ -178,18 +168,21 @@ class Graph:
             properties (dict): The updated properties to assign to the node.
 
         Returns:
-            dict: A dictionary representing the updated node, or None if no node is found.
+            dict: A dictionary representing the updated node.
+
+        Raises:
+            Exception: If no node is found.
         """
-        try:
-            query = "MATCH (n) WHERE id(n) = $node_id SET n += $properties RETURN n"
-            result = tx.run(query, node_id=node_id, properties=properties)
-            node = result.single()
-            if node:
-                node_properties = dict(node['n'].items())
-                return {'id': node['n'].id, 'label': node['n'].labels, 'properties': node_properties}
-            return None
-        except Exception as e:
-            raise Exception(f"Failed to update node properties: {e}")
+        query = "MATCH (n) WHERE n.uuid = $node_id SET n += $properties RETURN n"
+        result = tx.run(query, node_id=node_id, properties=properties).single()
+        if result is None:
+            raise Exception(f"No node found with node_id: {node_id}")
+        else:
+            node = result['n']
+            node_properties = dict(node.items())
+            del node_properties['uuid']
+            return {'id': node['uuid'], 'label': list(node.labels), 'properties': node_properties}
+
 
     def update_node_properties(self, node_id: str, properties: dict):
         """
@@ -205,6 +198,10 @@ class Graph:
         Returns:
             dict: A dictionary representing the updated node, or None if no node is found.
         """
+        if not isinstance(node_id, str):
+            raise TypeError("node_label must be a string")
+        if not isinstance(properties, dict):
+            raise TypeError("properties must be a dictionary")
         with self.driver.session() as session:
             try:
                 return session.write_transaction(self._update_node_properties_tx, node_id, properties)
@@ -225,7 +222,7 @@ class Graph:
             bool: True if the node was deleted, False otherwise.
         """
         try:
-            query = "MATCH (n) WHERE id(n) = $node_id DELETE n RETURN count(n) as deleted_count"
+            query = "MATCH (n) WHERE n.uuid = $node_id DELETE n RETURN count(n) as deleted_count"
             result = tx.run(query, node_id=node_id).single()
             deleted_count = result["deleted_count"]
             if deleted_count == 0:
