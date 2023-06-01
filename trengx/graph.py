@@ -62,9 +62,9 @@ class Graph:
         """
         self.close()
 
-    # Create node   
+    # Add node   
     @staticmethod
-    def _create_node_tx(tx, node_label: str, properties: dict):
+    def _add_node_tx(tx, node_label: str, properties: dict):
         """
         Private helper function to create a node within a transaction.
 
@@ -76,12 +76,10 @@ class Graph:
         Returns:
             dict: A dictionary representing the newly created node.
         """
-
         if not isinstance(node_label, str):
             raise TypeError("node_label must be a string")
         if not isinstance(properties, dict):
             raise TypeError("properties must be a dictionary")
-    
         try:
             properties['uuid'] = str(uuid.uuid4())
             query = f"CREATE (n:{node_label} $properties) RETURN n"
@@ -93,7 +91,7 @@ class Graph:
         except Exception as e:
             raise Exception(f"Failed to add node: {e}")
 
-    def create_node(self, node_label: str, properties: dict = None):
+    def add_node(self, node_label: str, properties: dict = None):
         """
         Public function to add a node in a Neo4j graph database.
 
@@ -112,33 +110,33 @@ class Graph:
 
         with self.driver.session() as session:
             try:
-                node = session.write_transaction(self._create_node_tx, node_label, properties)
+                node = session.write_transaction(self._add_node_tx, node_label, properties)
                 return node
             except Exception as e:
                 raise Exception(f"Failed to add node: {e}")
             
     # Get node by id
     @staticmethod
-    def _get_node_by_id_tx(tx, uuid: str):
+    def _get_node_by_id_tx(tx, node_id: str):
         """
         Private helper function to retrieve a node within a transaction.
 
         Args:
             tx: Transaction object.
-            uuid (str): The UUID of the node to retrieve.
+            node_id (str): The UUID of the node to retrieve.
 
         Returns:
-            dict: A dictionary representing the retrieved node, or None if no node is found.
+            dict: A dictionary representing the retrieved node.
         """
 
-        if not isinstance(uuid, str):
-            raise TypeError("UUID must be a string")
+        if not isinstance(node_id, str):
+            raise TypeError("node_id must be a string")
     
         try:
-            query = "MATCH (n) WHERE n.uuid = $uuid RETURN n"
-            result = tx.run(query, uuid=uuid).single()
+            query = "MATCH (n) WHERE n.uuid = $node_id RETURN n"
+            result = tx.run(query, node_id=node_id).single()
             if result is None:
-                return f"No node found with UUID: {uuid}"
+                return f"No node found with node_id: {node_id}"
             else:
                 node = result['n']
                 if node:
@@ -148,7 +146,7 @@ class Graph:
         except Exception as e:
             raise Exception(f"Failed to retrieve node: {e}")
 
-    def get_node_by_id(self, uuid: str):
+    def get_node_by_id(self, node_id: str):
         """
         Public function to retrieve a node from the graph database based on its UUID.
 
@@ -163,7 +161,7 @@ class Graph:
         """
         with self.driver.session() as session:
             try:
-                return session.read_transaction(self._get_node_by_id_tx, uuid)
+                return session.read_transaction(self._get_node_by_id_tx, node_id)
             except Exception as e:
                 raise Exception(f"Failed to retrieve node: {e}")
 
@@ -256,8 +254,9 @@ class Graph:
                 raise Exception(f"Failed to delete node: {e}")
 
 
+    #Set node value
     @staticmethod
-    def _set_node_value_tx(tx, node_id:int, value):
+    def _set_node_value_tx(tx, node_id:str, value):
         """
         1. MATCH path = (in1)-[r:num2op|op2num*0..]->() WHERE id(in1) = $node_id AND all(rel IN relationships(path) WHERE rel.trigger = true):
         Find a path that begins from a node (in1) which has the ID specified by the parameter node_id. 
@@ -283,53 +282,65 @@ class Graph:
         For subtraction and division, it also considers a reverse property on the operation node to decide the order of the operands. 
         If op.name is none of the given, it leaves out.value as it was.
         """
-        query = """
-            MATCH (in1)
-            WHERE id(in1) = $node_id
-            SET in1.value = $value
-            WITH in1
-            MATCH path = (in1)-[r:num2op|op2num*0..]->()
-            WHERE all(rel IN relationships(path) WHERE rel.trigger = true)
-            WITH path
-            ORDER BY length(path) DESC
-            LIMIT 1
-            WITH nodes(path) AS nodes
-            UNWIND range(0, size(nodes)-2, 2) AS i
-            WITH nodes[i] AS in1, nodes[i+1] AS op, nodes[i+2] AS out
-            MATCH (in1)-[:num2op]->(op)-[:op2num]->(out)
-            OPTIONAL MATCH (in2)-[:num2op]->(op)
-            WHERE id(in2) <> id(in1)  
-            WITH in1, op, out, in2
-            SET out.value = 
-            CASE 
-                WHEN op.name = '+' THEN in1.value + in2.value
-                WHEN op.name = '-' AND op.reverse = false THEN in1.value - in2.value
-                WHEN op.name = '-' AND op.reverse = true THEN in2.value - in1.value
-                WHEN op.name = '*' THEN in1.value * in2.value
-                WHEN op.name = '/' AND op.reverse = false THEN in1.value / in2.value
-                WHEN op.name = '/' AND op.reverse = true THEN in2.value / in1.value
-                WHEN op.name = 'round' THEN round(in1.value)
-                WHEN op.name = 'sqrt' THEN sqrt(in1.value)
-                WHEN op.name = 'abs' THEN abs(in1.value)
-                WHEN op.name = 'exp' THEN exp(in1.value)
-                WHEN op.name = 'log10' THEN log10(in1.value)
-                WHEN op.name = 'log' THEN log(in1.value)
-                WHEN op.name = 'sin' THEN sin(in1.value)
-                WHEN op.name = 'cos' THEN cos(in1.value)
-                WHEN op.name = 'tan' THEN tan(in1.value)
-                WHEN op.name = 'ceil' THEN ceil(in1.value)
-                WHEN op.name = 'floor' THEN floor(in1.value)
-                WHEN op.name = 'round' THEN round(in1.value)
-                WHEN op.name = 'sign' THEN sign(in1.value)
-                WHEN op.name = 'store' THEN in1.value
-                ELSE out.value
-            END
-        """
-        tx.run(query, node_id=node_id, value=value)
 
-    def set_node_value(self, node_id:int, value):
-        with self.driver.session() as session:
-            session.execute_write(self._set_node_value_tx, node_id, value)
+        try:
+            query = """
+                MATCH (in1)
+                WHERE id(in1) = $node_id
+                SET in1.value = $value
+                WITH in1
+                MATCH path = (in1)-[r:num2op|op2num*0..]->()
+                WHERE all(rel IN relationships(path) WHERE rel.trigger = true)
+                WITH path
+                ORDER BY length(path) DESC
+                LIMIT 1
+                WITH nodes(path) AS nodes
+                UNWIND range(0, size(nodes)-2, 2) AS i
+                WITH nodes[i] AS in1, nodes[i+1] AS op, nodes[i+2] AS out
+                MATCH (in1)-[:num2op]->(op)-[:op2num]->(out)
+                OPTIONAL MATCH (in2)-[:num2op]->(op)
+                WHERE id(in2) <> id(in1)  
+                WITH in1, op, out, in2
+                SET out.value = 
+                CASE 
+                    WHEN op.name = '+' THEN in1.value + in2.value
+                    WHEN op.name = '-' AND op.reverse = false THEN in1.value - in2.value
+                    WHEN op.name = '-' AND op.reverse = true THEN in2.value - in1.value
+                    WHEN op.name = '*' THEN in1.value * in2.value
+                    WHEN op.name = '/' AND op.reverse = false THEN in1.value / in2.value
+                    WHEN op.name = '/' AND op.reverse = true THEN in2.value / in1.value
+                    WHEN op.name = 'round' THEN round(in1.value)
+                    WHEN op.name = 'sqrt' THEN sqrt(in1.value)
+                    WHEN op.name = 'abs' THEN abs(in1.value)
+                    WHEN op.name = 'exp' THEN exp(in1.value)
+                    WHEN op.name = 'log10' THEN log10(in1.value)
+                    WHEN op.name = 'log' THEN log(in1.value)
+                    WHEN op.name = 'sin' THEN sin(in1.value)
+                    WHEN op.name = 'cos' THEN cos(in1.value)
+                    WHEN op.name = 'tan' THEN tan(in1.value)
+                    WHEN op.name = 'ceil' THEN ceil(in1.value)
+                    WHEN op.name = 'floor' THEN floor(in1.value)
+                    WHEN op.name = 'round' THEN round(in1.value)
+                    WHEN op.name = 'sign' THEN sign(in1.value)
+                    WHEN op.name = 'store' THEN in1.value
+                    ELSE out.value
+                END
+            """
+            tx.run(query, node_id=node_id, value=value)
+            return True
+        except Exception as e:
+            print(f"Error occurred: {e}")
+            return False
+
+    def set_node_value(self, node_id:str, value):
+        try:
+            with self.driver.session() as session:
+                success = session.execute_write(self._set_node_value_tx, node_id, value)
+            return success
+        except Exception as e:
+            print(f"Error occurred: {e}")
+            return False
+
 
     @staticmethod
     def _get_node_prop_tx(tx, node_id:int, key:str):
@@ -342,7 +353,7 @@ class Graph:
         record = result.single()
         return record['value']
 
-    def get_node_prop(self, node_id:int, key:str):
+    def get_node_prop(self, node_id:str, key:str):
         """Function for getting node property value using node ID"""
         with self.driver.session() as session:
             result = session.execute_read(self._get_node_prop_tx, node_id, key)
