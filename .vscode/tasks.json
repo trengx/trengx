@@ -2,32 +2,30 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "type": "func",
-      "label": "func: host start",
-      "command": "host start",
-      "problemMatcher": "$func-python-watch",
-      "isBackground": true,
-      "dependsOn": "pip install (functions)",
-      "options": {
-        "cwd": "${workspaceFolder}/trengx/azure-functions"
-      }
-    },
-    {
-      "label": "pip install (functions)",
+      "label": "pip install",
       "type": "shell",
       "osx": {
-        "command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
+        "command": "${config:python.pythonPath}/bin/python -m pip install -r requirements.txt"
       },
       "windows": {
-        "command": "${config:azureFunctions.pythonVenv}/Scripts/python -m pip install -r requirements.txt"
+        "command": "${config:python.pythonPath}/Scripts/python -m pip install -r requirements.txt"
       },
       "linux": {
-        "command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
+        "command": "${config:python.pythonPath}/bin/python -m pip install -r requirements.txt"
       },
       "problemMatcher": [],
       "options": {
-        "cwd": "${workspaceFolder}/trengx/azure-functions"
+        "cwd": "${workspaceFolder}/trengx"
       }
+    },
+    {
+      "label": "run script",
+      "type": "shell",
+      "command": "${config:python.pythonPath}/bin/python ${file}",
+      "windows": {
+        "command": "${config:python.pythonPath}/Scripts/python ${file}"
+      },
+      "problemMatcher": []
     }
   ]
 }
