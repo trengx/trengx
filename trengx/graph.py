@@ -1,6 +1,6 @@
 # Graph class
 import uuid
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict, Any
 from neo4j import GraphDatabase as graphdb
 
 class Graph:
@@ -34,7 +34,8 @@ class Graph:
         except Exception as e:
             raise Exception(f"Failed to close driver: {e}")
 
-    def run_query(self, query: str, parameters: Optional[Dict[str, Union[str, int]]] = None) -> List[Dict[str, Union[str, int]]]:
+    # Run query
+    def run_query(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
         Runs an arbitrary Cypher query on the database.
 
@@ -45,7 +46,17 @@ class Graph:
 
         Returns:
             list[dict]: A list of dictionaries representing the records returned by the query.
+
+        Raises:
+            TypeError: If the type of 'query' is not str or 'parameters' is not a dictionary.
+
+        Example:
+            run_query("MATCH (p:Person) WHERE p.age > $age RETURN p.name, p.age", {"age": 30})
         """
+
+        if not isinstance(query, str):
+            raise TypeError(f"Expected str for query, got {type(query)}")
+
         if parameters is not None and not isinstance(parameters, dict):
             raise TypeError(f"Expected dict for parameters, got {type(parameters)}")
 
@@ -54,7 +65,11 @@ class Graph:
                 result = session.run(query, parameters)
                 return [record.data() for record in result]
         except Exception as e:
-            raise Exception(f"Failed to run query: {e}")
+            # Log the original exception
+            print(f"Failed to run query: {e}")
+            # then raise the original exception
+            raise e
+
 
     def __del__(self):
         """
@@ -109,7 +124,7 @@ class Graph:
             except Exception as e:
                 raise Exception(f"Failed to add node: {e}")
             
-    # Get node by id
+    # Get node
     @staticmethod
     def _get_node_tx(tx, node_id: str):
         """
@@ -299,37 +314,32 @@ class Graph:
         """
 
         try:
-            query = """
+            query="""
                 MATCH (in1)
                 WHERE in1.uuid = $node_id
                 SET in1.value = $value
                 WITH in1
-                MATCH path = (in1)-[r:num2op|op2num*0..]->()
-                WHERE all(rel IN relationships(path) WHERE rel.trigger = true)
-                WITH path
-                ORDER BY length(path) DESC
-                LIMIT 1
+                MATCH path = ( in1)-[r:num2op|op2num*0..]->()
                 WITH nodes(path) AS nodes
                 UNWIND range(0, size(nodes)-2, 2) AS i
                 WITH nodes[i] AS in1, nodes[i+1] AS op, nodes[i+2] AS out
-                MATCH (in1)-[:num2op]->(op)-[:op2num]->(out)
+                MATCH (in1)-[r:num2op]->(op)-[:op2num]->(out)
                 OPTIONAL MATCH (in2)-[:num2op]->(op)
-                WHERE in1.uuid  <> in2.uuid   
-                WITH in1, op, out, in2
+                WHERE in1.uuid  <> in2.uuid
+                WITH in1, r, op, out, in2
                 SET out.value = 
                 CASE 
                     WHEN op.name = '+' THEN in1.value + in2.value
-                    WHEN op.name = '-' AND op.reverse = false THEN in1.value - in2.value
-                    WHEN op.name = '-' AND op.reverse = true THEN in2.value - in1.value
+                    WHEN op.name = '-' AND r.reverse = false THEN in1.value - in2.value
+                    WHEN op.name = '-' AND r.reverse = true THEN in2.value - in1.value
                     WHEN op.name = '*' THEN in1.value * in2.value
-                    WHEN op.name = '/' AND op.reverse = false THEN in1.value / in2.value
-                    WHEN op.name = '/' AND op.reverse = true THEN in2.value / in1.value
-                    WHEN op.name = 'round' THEN round(in1.value)
-                    WHEN op.name = 'sqrt' THEN sqrt(in1.value)
+                    WHEN op.name = '/' AND r.reverse = false AND in2.value <> 0 THEN in1.value / in2.value
+                    WHEN op.name = '/' AND r.reverse = true AND in1.value <> 0 THEN in2.value / in1.value
+                    WHEN op.name = 'sqrt' AND in1.value >= 0 THEN sqrt(in1.value)
                     WHEN op.name = 'abs' THEN abs(in1.value)
                     WHEN op.name = 'exp' THEN exp(in1.value)
-                    WHEN op.name = 'log10' THEN log10(in1.value)
-                    WHEN op.name = 'log' THEN log(in1.value)
+                    WHEN op.name = 'log10' AND in1.value > 0 THEN log10(in1.value)
+                    WHEN op.name = 'log' AND in1.value > 0 THEN log(in1.value)
                     WHEN op.name = 'sin' THEN sin(in1.value)
                     WHEN op.name = 'cos' THEN cos(in1.value)
                     WHEN op.name = 'tan' THEN tan(in1.value)
@@ -342,17 +352,17 @@ class Graph:
                 END
             """
             tx.run(query, node_id=node_id, value=value)
-            return True
+
         except Exception as e:
-            print(f"Error occurred: {e}")
-            return False
+            raise Exception(f"Error occurred: {e}")
 
     def set_node_value(self, node_id:str, value):
         if not isinstance(node_id, str):
             raise TypeError("node_id must be a string")
         with self.driver.session() as session:
-            return session.execute_write(self._set_node_value_tx, node_id, value)
+            session.execute_write(self._set_node_value_tx, node_id, value)
         
+    #Get node value
     @staticmethod
     def _get_node_value_tx(tx, node_id: str):
         """
