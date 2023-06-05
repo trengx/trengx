@@ -318,19 +318,26 @@ class Graph:
                 MATCH (in1)
                 WHERE in1.uuid = $node_id
                 SET in1.value = $value
+
                 WITH in1
-                CALL apoc.path.expand(in1, 'num2op|op2num>', '*', 0, -1) YIELD path
-                WITH path
-                UNWIND nodes(path) AS node
-                WITH collect(node) AS nodes
-                UNWIND range(0, size(nodes)-2, 2) AS i
-                WITH nodes[i] AS in1, nodes[i+1] AS op, nodes[i+2] AS out
+
+                CALL apoc.path.subgraphAll(in1, {
+                relationshipFilter: 'num2op|op2num>',
+                maxLevel: -1
+                }) YIELD nodes, relationships
+
+                WITH nodes
+
+                UNWIND nodes AS node
+
                 MATCH (in1)-[r:num2op]->(op)-[:op2num]->(out)
                 OPTIONAL MATCH (in2)-[:num2op]->(op)
-                WHERE in1.uuid  <> in2.uuid
+                WHERE in1.uuid <> in2.uuid
+
                 WITH in1, r, op, out, in2
-                SET out.value = 
-                CASE 
+
+                SET out.value =
+                CASE
                     WHEN op.name = '+' THEN in1.value + in2.value
                     WHEN op.name = '-' AND r.reverse = false THEN in1.value - in2.value
                     WHEN op.name = '-' AND r.reverse = true THEN in2.value - in1.value
@@ -352,8 +359,6 @@ class Graph:
                     WHEN op.name = 'store' THEN in1.value
                     ELSE out.value
                 END
-
-
 
             """
             tx.run(query, node_id=node_id, value=value)
