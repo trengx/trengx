@@ -17,5 +17,17 @@
     "azureFunctions.projectLanguage": "Python",
     "azureFunctions.projectRuntime": "~4",
     "debug.internalConsoleOptions": "neverOpen",
-    "azureFunctions.projectSubpath": "trengx/azure-functions"
+    "azureFunctions.projectSubpath": "trengx/azure-functions",
+    "cSpell.words": [
+        "Fcns",
+        "Fsnc",
+        "Glomerular",
+        "Gsub",
+        "kabs",
+        "kgri",
+        "kmax",
+        "kmin",
+        "Qgut",
+        "Qsto"
+    ]
 }
