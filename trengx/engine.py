@@ -37,58 +37,74 @@ def op2 (G, in1_id=None, in1_name=None, in1_value=None, in1_grad=0, in2_id=None,
     G.add_edge(op_id, out_id, label='op2num')
     return in1_id, in2_id, op_id, out_id
 
+               
 # Forward propagation function
-def forward_propagate(G, node_id, node_value):
-    G.nodes[node_id]['value'] = node_value
-    for _, op in G.out_edges(node_id):
+def forward_propagate(G, in1, in1_value, updated_nodes=None):
+    # Initialize the set of updated nodes if it's None
+    if updated_nodes is None:
+        updated_nodes = set()
+
+    prev_in1_value = G.nodes[in1]['value'] 
+    G.nodes[in1]['value'] =in1_value
+    updated_nodes.add(in1)  # Mark the current node as updated
+    for _, op in G.out_edges(in1):
         op_name = G.nodes[op]['name']
-        reverse = G[node_id][op].get('reverse', False)
+        reverse = G[in1][op].get('reverse', False)
 
         # Handle the optional second operand
-        in2 = next((node for node in G.predecessors(op) if node != node_id), None)
+        in2 = next((node for node in G.predecessors(op) if node != in1), None)
         in2_value = G.nodes[in2]['value'] if in2 else None
-        
+
         out = next(G.successors(op), None)
 
         # Calculate the output value based on the operation
         if op_name == '+':
-            out_value = node_value + (in2_value if in2_value is not None else 0)
+            out_value = in1_value + (in2_value if in2_value is not None else 0)
         elif op_name == '-':
             if in2_value is not None:
                 if reverse:
-                    out_value = in2_value - node_value
+                    out_value = in2_value - in1_value
                 else:
-                    out_value = node_value - in2_value
+                    out_value = in1_value - in2_value
             else:
-                out_value = node_value
+                out_value = in1_value
         elif op_name == '*':
-            out_value = node_value * (in2_value if in2_value is not None else 1)
+            out_value = in1_value * (in2_value if in2_value is not None else 1)
         elif op_name == 'log':
-            if node_value > 0:
-                out_value = np.log(node_value)
+            if in1_value > 0:
+                out_value = np.log(in1_value)
             else:
-                print(f"Error: Log of non-positive number {node_value}")
+                print(f"Error: Log of non-positive number {in1_value}")
                 return
         elif op_name == 'sin':
-            out_value = np.sin(node_value)
+            out_value = np.sin(in1_value)
         elif op_name == 'ReLU':
-            if node_value > 0:
-                out_value = node_value
+            if in1_value > 0:
+                out_value = in1_value
             else:
                 out_value = 0
         elif op_name == 'sqr':
-            out_value = node_value**2
+            out_value = in1_value**2
         elif op_name == 'sqrt':
-            if node_value >= 0:
-                out_value = np.sqrt(node_value)
+            if in1_value >= 0:
+                out_value = np.sqrt(in1_value)
             else:
-                raise ValueError(f"Error: sqrt of negative number {node_value}")
+                print(f"Error: sqrt of negative number {in1_value}")
+                return
+        elif op_name == 'store':
+            if out not in updated_nodes:  # Only update 'out' if it hasn't been updated yet
+                forward_propagate(G, out, prev_in1_value, updated_nodes)
+            G.nodes[in1]['value'] = in1_value
+            continue
 
         # Store the output value back into the graph
-        G.nodes[out]['value'] = out_value
+        if out not in updated_nodes:  # Only update 'out' if it hasn't been updated yet
+            G.nodes[out]['value'] = out_value
 
-        for _, out in G.out_edges(op):
-            forward_propagate(G, out, out_value)
+        # Now recursively forward propagate the new value to the next nodes
+        forward_propagate(G, out, out_value, updated_nodes)
+
+
 
 
 # Backward propagation function
@@ -138,7 +154,6 @@ def backward_propagate(G, node_id, lr):
             for in_node, _ in G.in_edges(op):
                 backward_propagate(G, in_node, lr)
 
-            
 class Neuron:
     def __init__(self, G):
         self.G = G
