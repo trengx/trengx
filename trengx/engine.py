@@ -37,7 +37,6 @@ def op2 (G, in1_id=None, in1_name=None, in1_value=None, in1_grad=0, in2_id=None,
     G.add_edge(op_id, out_id, label='op2num')
     return in1_id, in2_id, op_id, out_id
 
-               
 # Forward propagation function
 def forward_propagate(G, in1, in1_value, updated_nodes=None):
     # Initialize the set of updated nodes if it's None
@@ -104,9 +103,6 @@ def forward_propagate(G, in1, in1_value, updated_nodes=None):
         # Now recursively forward propagate the new value to the next nodes
         forward_propagate(G, out, out_value, updated_nodes)
 
-
-
-
 # Backward propagation function
 def backward_propagate(G, node_id, lr):
     if G.nodes[node_id]['name'][0] in {'w', 'b'}:  # variable names start with 'w' or 'b'
@@ -165,7 +161,3 @@ class Neuron:
 
     def get_nodes(self):
         return self.inlet, self.b, self.v, self.outlet
-
-
-
-        
