@@ -36,7 +36,7 @@ def op2 (G, in1_id=None, in1_name=None, in1_value=None, in1_grad=0, in2_id=None,
     G.add_edge(in2_id, op_id, label='num2op', reverse=True)
     G.add_edge(op_id, out_id, label='op2num')
     return in1_id, in2_id, op_id, out_id
-               
+
 # Forward propagation function
 def forward_propagate(G, in1, in1_value, updated_nodes=None):
     # Initialize the set of updated nodes if it's None
