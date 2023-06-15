@@ -46,11 +46,6 @@ def test_add_node_with_additional_properties():
     assert node['properties']['value'] == 4.0
     assert node['properties']['description'] == 'This is Node 3'
 
-def test_add_node_with_incorrect_node_label_type():
-    # Test case 4: Add a node with incorrect 'node_label' type
-    with pytest.raises(TypeError):
-        node = g.add_node(123, {'name': 'Node 4', 'value': 2.
-
 def test_delete_node():
     """Function for testing delete_node"""
     node = g.add_node ('num', 'node', {'value': 2.0})

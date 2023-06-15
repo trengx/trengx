@@ -1,6 +1,10 @@
 import uuid
 import numpy as np
 
+class Engine:
+    
+    def __init__():
+
 # Type 1 elementary operation unit
 def op1 (G, in_id=None, in_name=None, in_value=None, in_grad=0, op_name=None, out_id=None, out_name=None, out_value=None, out_grad=0):
     # Generate a new UUID if no id is provided for in
