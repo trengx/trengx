@@ -106,7 +106,6 @@ def forward_propagate(G, in1, in1_value, updated_nodes=None):
 
 
 
-
 # Backward propagation function
 def backward_propagate(G, node_id, lr):
     if G.nodes[node_id]['name'][0] in {'w', 'b'}:  # variable names start with 'w' or 'b'
@@ -166,6 +165,3 @@ class Neuron:
     def get_nodes(self):
         return self.inlet, self.b, self.v, self.outlet
 
-
-
-        
