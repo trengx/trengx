@@ -46,7 +46,6 @@ class AddNode:
         """
         self.graph.add_node(self.id, name=self.name, value=self.value, grad=self.grad)
         created_node = self.graph.nodes[self.id]
-        print(created_node)  # Print the created node separately
         return self.id, created_node
     
 def main():
