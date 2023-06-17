@@ -20,6 +20,9 @@ class DrawOperationType2(DrawOperationType1):
     def draw_graph(self):
         super().draw_graph()
         self.graph.add_node(self.operand2_id, name=self.operand2_name, value=self.operand2_value, grad=self.operand2_grad)
-        self.graph.add_edge(self.operand2_id, self.operator_id)
+        if self.operand2_name == '-' or '/':
+            self.graph.add_edge(self.operand2_id, self.operator_id, second_operand=True)
+        else:
+            self.graph.add_edge(self.operand2_id, self.operator_id)
         return self.operand_id, self.operand2_id, self.operator_id, self.output_id
 
