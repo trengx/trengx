@@ -20,6 +20,3 @@ class AddNode:
     
     def __str__(self):
         return f"Node(id={self.id}, label={self.label}, name={self.name}, value={self.value}, grad={self.grad})"
-
-
-
