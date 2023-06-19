@@ -1,2 +1,2 @@
-from .add_node.add_node import node
+from .add_node.node import node
 
