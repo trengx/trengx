@@ -30,6 +30,7 @@
         "kmin",
         "matplotlib",
         "networkx",
+        "pyparsing",
         "pyplot",
         "Qgut",
         "Qsto"

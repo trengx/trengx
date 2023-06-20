@@ -1,3 +1,2 @@
-from .engine.add_node.node import node
-from .engine.add_edge.edge import edge
-
+from .engine.node.node_factory import add_node
+from .engine.edge.edge_factory import add_edge
