@@ -2,17 +2,6 @@ from .add_edge import AddEdge
 
 class Neo4jAddEdge(AddEdge):
     def add_to_graph(self):
-        if not isinstance(self.node1, str):
-            raise TypeError('node1 must be a string')
-        if not isinstance(self.node2, str):
-            raise TypeError('node2 must be a string')
-        if not isinstance(self.id, str):
-            raise TypeError('id must be a string')
-        if not isinstance(self.label, str):
-            raise TypeError('label must be a string')
-        if not isinstance(self.second_operand, bool):
-            raise TypeError('second_operand must be a boolean')
-        
         # Construct the Cypher query
         query = f"""
                  MATCH (a),(b) 
