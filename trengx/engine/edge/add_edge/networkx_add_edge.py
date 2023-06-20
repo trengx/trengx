@@ -1,18 +1,18 @@
 from .add_edge import AddEdge
 
 class NetworkXAddEdge(AddEdge):
-    def execute(self, edge):
-        """
-        Adds an edge between the source node and the target node in the graph.
-
-        Args:
-            source_node: The source node object.
-            target_node: The target node object.
-            label (optional): The label of the edge.
-
-        Returns:
-            The source node object.
-        """
-        self.driver.add_edge(edge.source, edge.target, id = edge.id, label=edge.label, name=edge.name, second_operand=edge.second_operand)
-        return edge
-
+    def __init__(self, driver, edge):
+        super().__init__(driver, edge)
+        self.edge_created = False
+        self.execute()
+        
+    def execute(self):
+        "The first argument is the source node and the second argument is the target node."
+        self.driver.add_edge(self.source, self.target, id=self.id, label=self.label, name=self.name, second_operand=self.second_operand)
+        self.edge_created = True
+        
+    def __str__(self):
+        if self.edge_created:
+            return str(self.edge)
+        else:
+            return "Edge not created."
