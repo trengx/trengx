@@ -30,3 +30,5 @@ class Neo4jAddNode(AddNode):
             return str(self.get_node_properties())
         else:
             return "Node not created."
+
+        

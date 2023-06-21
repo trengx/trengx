@@ -1,3 +1,32 @@
+class Component:
+    def forward_propagate(self):
+        pass
+
+    def backward_propagate(self):
+        pass
+
+class Neuron(Component): 
+    def __init__(self):
+        self.nodes = []
+
+    def forward_propagate(self):
+        for node in self.nodes:
+            node.forward_propagate()
+
+    def backward_propagate(self):
+        for node in reversed(self.nodes):
+            node.backward_propagate()
+
+class Node(Component): 
+    def forward_propagate(self):
+        # implement forward propagation for the node
+
+    def backward_propagate(self):
+        # implement backward propagation for the node
+       
+
+
+
 import uuid
 import numpy as np
 
