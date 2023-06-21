@@ -37,3 +37,5 @@ def add_edge(driver, edge):
             return edge_class(driver, edge)
 
     raise ValueError(f'Invalid driver type: {type(driver)}. Supported driver types are: {list(driver_to_edge_class_registry.keys())}')
+
+    

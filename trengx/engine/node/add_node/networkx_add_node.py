@@ -17,6 +17,7 @@ class NetworkXAddNode(AddNode):
 
         Args:
             node: The node object containing properties such as id, label, name, value, grad.
+
         '''
         self.driver.add_node(self.id, label=self.label, name=self.name, value=self.value, grad=self.grad)
         self.node_created = True
@@ -26,3 +27,4 @@ class NetworkXAddNode(AddNode):
             return str(self.node)
         else:
             return "Node not created."
+
