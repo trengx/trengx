@@ -1,7 +1,12 @@
 from .add_node import AddNode
 
 class NetworkXAddNode(AddNode):
-    def execute(self, node):
+    def __init__(self, driver, node):
+        super().__init__(driver, node)
+        self.node_created = False
+        self.execute()
+        
+    def execute(self):
         '''
         Creates a node in the graph using the properties from the given node object
         by utilizing the networkx 'add_node' method.
@@ -12,10 +17,12 @@ class NetworkXAddNode(AddNode):
 
         Args:
             node: The node object containing properties such as id, label, name, value, grad.
-
-        Returns:
-            The same node object that was added to the graph.
         '''
+        self.driver.add_node(self.id, label=self.label, name=self.name, value=self.value, grad=self.grad)
+        self.node_created = True
         
-        self.driver.add_node(node.id, label=node.label, name=node.name, value=node.value, grad=node.grad)
-        return node
+    def __str__(self):
+        if self.node_created:
+            return str(self.node)
+        else:
+            return "Node not created."
