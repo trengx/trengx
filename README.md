@@ -1,7 +1,7 @@
 # Trengx
 Under Construction!
 
-"Transformers Made Easy for IoT"
+"Adaptive Transformers Made Easy for IoT"
 
 The Trengx platform is constructed using an open-source project as its foundation (patent-protected).
 
